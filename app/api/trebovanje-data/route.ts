@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { admin, requireSession } from "@/lib/server";
 import { ensureOneTimeCleanStart } from "@/lib/cleanStart";
+import { reconcileCentralStock } from "@/lib/centralStock";
 
 const BUCKET = "cm-article-images";
 
@@ -26,6 +27,15 @@ export async function GET() {
   try {
     const s = await requireSession();
     await ensureOneTimeCleanStart();
+
+    const { data: central, error: centralErr } = await admin
+      .from("cm_locations")
+      .select("id")
+      .eq("type", "CENTRAL")
+      .limit(1)
+      .single();
+    if (centralErr || !central?.id) throw centralErr || new Error("Centralni magacin nije pronađen.");
+    await reconcileCentralStock(admin, String(central.id));
 
     if (s.role !== "PRODAVNICA" && s.role !== "ADMIN" && s.role !== "MAGACIONER") {
       return NextResponse.json({ ok: false, message: "Nedozvoljen pristup." }, { status: 403 });

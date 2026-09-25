@@ -2065,8 +2065,8 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
           <section className="banner">
             <h2 style={{ fontSize: 28, color: "#1c2f82" }}>📦 STANJE OD NULE</h2>
             <p className="muted">
-              Početno stanje svih artikala je 0. Stanje se računa automatski: <b>ULAZ ROBE − POTVRĐENA TREBOVANJA = TRENUTNO STANJE</b>.
-              Samo poslato/kreirano trebovanje ne skida robu. Roba se skida tek kada magacioner potvrdi i završi trebovanje.
+              Početno stanje svih artikala je 0. Stanje se računa automatski: <b>ULAZ ROBE − SVA UNEŠENA TREBOVANJA = TRENUTNO STANJE</b>.
+              Čim prodavnica pošalje trebovanje, količina se odmah skida sa stanja centralnog magacina. Status magacionera ne menja ovu računicu.
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(250px,1fr))", gap: 14, marginTop: 16 }}>
               {stock.map((s) => {
@@ -2088,7 +2088,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                         <div style={{ fontSize: 22, fontWeight: 1000, color: "#047857" }}>+{qtyLabel(ulaz)}</div>
                       </div>
                       <div style={{ padding: 10, borderRadius: 12, background: "#fff7ed" }}>
-                        <div style={{ fontSize: 11, fontWeight: 900, color: "#c2410c" }}>POTVRĐENO IZAŠLO</div>
+                        <div style={{ fontSize: 11, fontWeight: 900, color: "#c2410c" }}>TREBOVANO</div>
                         <div style={{ fontSize: 22, fontWeight: 1000, color: "#c2410c" }}>−{qtyLabel(izlaz)}</div>
                       </div>
                       <div style={{ padding: 10, borderRadius: 12, background: "#eef2ff" }}>

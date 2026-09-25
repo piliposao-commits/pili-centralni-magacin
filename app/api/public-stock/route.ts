@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
 import { admin } from "@/lib/server";
 import { ensureOneTimeCleanStart } from "@/lib/cleanStart";
+import { reconcileCentralStock } from "@/lib/centralStock";
 
 export async function GET() {
   try {
     await ensureOneTimeCleanStart();
+
+    const { data: central, error: centralErr } = await admin
+      .from("cm_locations")
+      .select("id")
+      .eq("type", "CENTRAL")
+      .limit(1)
+      .single();
+    if (centralErr || !central?.id) throw centralErr || new Error("Centralni magacin nije pronađen.");
+    await reconcileCentralStock(admin, String(central.id));
 
     const [{ data: stock, error: stockErr }, { data: locations, error: locErr }] = await Promise.all([
       admin.from("cm_stock_view").select("article_id,sifra,naziv,barkod,jm,stanje").order("naziv"),

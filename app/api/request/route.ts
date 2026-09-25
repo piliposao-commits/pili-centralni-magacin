@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { admin, requireSession } from "@/lib/server";
+import { reconcileCentralStock } from "@/lib/centralStock";
 
 export async function POST(req: Request) {
   try {
@@ -61,7 +62,28 @@ export async function POST(req: Request) {
     });
     if (error) throw error;
 
-    return NextResponse.json({ ok: true, data, location: location.name, requested_by: session.full_name });
+    // Čim je trebovanje kreirano, odmah se skida/rezerviše količina iz centralnog stanja.
+    const { data: central, error: centralErr } = await admin
+      .from("cm_locations")
+      .select("id")
+      .eq("type", "CENTRAL")
+      .limit(1)
+      .single();
+
+    if (centralErr || !central?.id) {
+      throw centralErr || new Error("Centralni magacin nije pronađen.");
+    }
+
+    await reconcileCentralStock(admin, String(central.id));
+
+    return NextResponse.json({
+      ok: true,
+      data,
+      location: location.name,
+      requested_by: session.full_name,
+      stock_updated: true,
+      rule: "ULAZ - SVA AKTIVNA TREBOVANJA",
+    });
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, message: e.message || "Greška" },
