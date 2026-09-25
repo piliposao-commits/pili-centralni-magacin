@@ -1,0 +1,14 @@
+{
+  "name": "PILI Centralni Magacin",
+  "short_name": "PILI Magacin",
+  "description": "Centralni magacin PILI",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b3d91",
+  "icons": [
+    {"src":"/icons/pili-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"/icons/pili-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
