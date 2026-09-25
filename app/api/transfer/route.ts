@@ -93,6 +93,19 @@ export async function POST(req: Request) {
     });
     if (error) throw error;
 
+    // Buduće pravilo: čim magacioner potvrdi i završi pakovanje,
+    // trebovanje mora eksplicitno da dobije završni status.
+    // Ne oslanjamo se samo na staru Supabase RPC funkciju, jer je ranije
+    // mogla da proknjiži PRENOS, a da status zahteva ostane "U PRIPREMI".
+    if (requestId) {
+      const { error: statusFixErr } = await admin
+        .from("cm_documents")
+        .update({ status: "POSLATO", updated_at: new Date().toISOString() })
+        .eq("id", requestId)
+        .eq("type", "TREBOVANJE");
+      if (statusFixErr) throw statusFixErr;
+    }
+
     // SELF-HEAL: proveri da li je centralno stanje stvarno umanjeno.
     // Ako stara DB funkcija nije oduzela robu, API to uradi odmah — bez ručnog SQL-a.
     const { data: afterRows, error: afterErr } = await admin
