@@ -62,12 +62,39 @@ export async function reconcileCentralStock(admin: any, centralId: string): Prom
     }
   }
 
+  // Završeni PRENOSI su primarni dokaz da je roba stvarno spakovana/izdata.
+  const finalTransfers = (docs || []).filter((d: any) => {
+    const type = String(d?.type || "").toUpperCase();
+    const status = String(d?.status || "").toUpperCase();
+    return (
+      type === "PRENOS" &&
+      ["POSLATO", "PRIMLJENO", "ZAVRSENO"].includes(status) &&
+      String(d?.source_location_id || "") === String(centralId)
+    );
+  });
+
+  // Pomoćna funkcija da prepoznamo da li finalizovano trebovanje već ima svoj PRENOS.
+  const hasMatchingTransfer = (req: any) => {
+    const reqSig = lineSignature(req);
+    if (!reqSig) return false;
+    const reqTime = new Date(req?.created_at || 0).getTime();
+
+    return finalTransfers.some((t: any) => {
+      if (String(t?.destination_location_id || "") !== String(req?.destination_location_id || "")) return false;
+      if (lineSignature(t) !== reqSig) return false;
+      const transferTime = new Date(t?.created_at || 0).getTime();
+
+      // Transfer nastaje posle trebovanja. Dajemo dovoljno širok prozor i za staru istoriju.
+      return transferTime >= reqTime && transferTime - reqTime <= 7 * 24 * 60 * 60 * 1000;
+    });
+  };
+
   for (const d of docs || []) {
     const type = String(d?.type || "").toUpperCase();
     const status = String(d?.status || "").toUpperCase();
     const lines = Array.isArray(d?.cm_document_lines) ? d.cm_document_lines : [];
 
-    // Početno stanje sistema je 0. Samo pravi završeni ULAZI u centralni magacin povećavaju stanje.
+    // Početno stanje sistema je 0. Završeni ULAZI u CENTRALNI MAGACIN povećavaju stanje.
     if (
       type === "ULAZ" &&
       status === "ZAVRSENO" &&
@@ -82,12 +109,7 @@ export async function reconcileCentralStock(admin: any, centralId: string): Prom
       }
     }
 
-    // NAJVAŽNIJE PRAVILO:
-    // Roba se smatra izašlom tek kada postoji stvarni PRENOS koji je magacioner napravio
-    // klikom na "POTVRDI I ZAVRŠI TREBOVANJE".
-    // Zato računamo PRENOS dokumente, a NE status samog trebovanja.
-    // Ovo automatski uključuje i ranije već knjižena/spakovana trebovanja,
-    // čak i ako je njihov stari status greškom ostao "U PRIPREMI".
+    // Primarno: svaki završeni PRENOS iz centralnog magacina se oduzima.
     if (
       type === "PRENOS" &&
       ["POSLATO", "PRIMLJENO", "ZAVRSENO"].includes(status) &&
@@ -98,6 +120,25 @@ export async function reconcileCentralStock(admin: any, centralId: string): Prom
         if (!id) continue;
         outboundMap.set(id, Number(outboundMap.get(id) || 0) + Number(line?.qty || 0));
       }
+    }
+  }
+
+  // BACKFILL STARE ISTORIJE:
+  // Ako je staro trebovanje ručno označeno kao prihvaćeno/završeno, ali u staroj verziji
+  // nije nastao PRENOS dokument, njegove stavke se ipak računaju kao izlaz.
+  // Ako PRENOS postoji, ovaj fallback se NE koristi i nema duplog oduzimanja.
+  for (const req of (docs || []).filter((d: any) => {
+    const type = String(d?.type || "").toUpperCase();
+    const status = String(d?.status || "").toUpperCase();
+    return type === "TREBOVANJE" && ["POSLATO", "PRIMLJENO", "ZAVRSENO"].includes(status);
+  })) {
+    if (hasMatchingTransfer(req)) continue;
+
+    const lines = Array.isArray(req?.cm_document_lines) ? req.cm_document_lines : [];
+    for (const line of lines) {
+      const id = String(line?.article_id || "");
+      if (!id) continue;
+      outboundMap.set(id, Number(outboundMap.get(id) || 0) + Number(line?.qty || 0));
     }
   }
 
