@@ -19,6 +19,10 @@ type Stock = {
   maloprodajna_cena?: number;
   vrednost?: number;
   image_url?: string | null;
+  initial_qty?: number;
+  inbound_qty?: number;
+  outbound_qty?: number;
+  calculated_qty?: number;
 };
 
 type Location = {
@@ -259,8 +263,6 @@ export default function Page() {
   const [pendingArticleImages, setPendingArticleImages] = useState<Record<string, File>>({});
   const [savingArticleImage, setSavingArticleImage] = useState<string | null>(null);
 const [scanFiles, setScanFiles] = useState<File[]>([]);
-  const [initialQty, setInitialQty] = useState<Record<string, number>>({});
-  const [savingInitial, setSavingInitial] = useState<string | null>(null);
   const [inventoryQty, setInventoryQty] = useState<Record<string, number>>({});
   const [savingInventory, setSavingInventory] = useState(false);
   const [alertsEnabled, setAlertsEnabled] = useState(false);
@@ -365,7 +367,6 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
       setStock(j.stock || []);
       const serverImages = Object.fromEntries((j.stock || []).filter((x: any) => x.image_url).map((x: any) => [articleImageKey(x), x.image_url]));
       setImages((prev) => ({ ...prev, ...serverImages }));
-      setInitialQty(Object.fromEntries((j.stock || []).map((x: any) => [x.article_id, Number(x.initial_qty ?? 0)])));
       setInventoryQty(Object.fromEntries((j.stock || []).map((x: any) => [x.article_id, Number(x.stanje || 0)])));
       setLocations(j.locations || []);
       setRequests(j.requests || []);
@@ -897,21 +898,6 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     } finally {
       setInboundBusy(false);
     }
-  }
-
-  async function saveInitialStock(articleId: string) {
-    setSavingInitial(articleId);
-    setMsg("");
-    const r = await fetch("/api/initial-stock", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ article_id: articleId, qty: Number(initialQty[articleId] || 0) }),
-    });
-    const j = await r.json();
-    setSavingInitial(null);
-    if (!j.ok) return setMsg(j.message || "Greška pri čuvanju početnog stanja.");
-    setMsg("Početno stanje je sačuvano.");
-    await load();
   }
 
   async function finishInventoryCount() {
@@ -2077,33 +2063,46 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
 
         {user.role === "ADMIN" && tab === "pocetno" && (
           <section className="banner">
-            <h2 style={{ fontSize: 28, color: "#1c2f82" }}>📦 POČETNO STANJE</h2>
-            <p className="muted">Početna količina ostaje sačuvana kao polazno stanje. Kada roba izađe kroz potvrđeno trebovanje, smanjuje se TRENUTNO STANJE, ali početna količina ostaje nepromenjena.</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 14, marginTop: 16 }}>
-              {stock.map((s) => (
-                <div key={s.article_id} style={{ border: "1px solid #dfe5ee", borderRadius: 18, padding: 14, background: "white" }}>
-                  <div style={{ fontWeight: 1000, color: "#1c2f82", fontSize: 18, minHeight: 44 }}>{s.naziv}</div>
-                  <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Šifra {s.sifra} · {s.barkod || "bez barkoda"}</div>
-                  <div style={{ marginTop: 12, fontSize: 12, fontWeight: 900, color: "#6b7280" }}>POČETNA KOLIČINA ({s.jm})</div>
-                  <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 10, background: "#eef7ff", fontSize: 13, fontWeight: 900, color: "#1c2f82" }}>TRENUTNO STANJE: {qtyLabel(Number(s.stanje))} {s.jm}</div>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.001"
-                    value={initialQty[s.article_id] ?? 0}
-                    onChange={(e) => setInitialQty({ ...initialQty, [s.article_id]: Number(e.target.value) })}
-                    style={{ width: "100%", marginTop: 6, minHeight: 52, borderRadius: 12, border: "2px solid #dfe5ee", padding: "0 12px", fontSize: 22, fontWeight: 1000, textAlign: "center" }}
-                  />
-                  <button
-                    className="btn"
-                    style={{ width: "100%", marginTop: 10, background: "#1c2f82", color: "white" }}
-                    disabled={savingInitial === s.article_id}
-                    onClick={() => saveInitialStock(s.article_id)}
-                  >
-                    {savingInitial === s.article_id ? "ČUVAM..." : "SAČUVAJ"}
-                  </button>
-                </div>
-              ))}
+            <h2 style={{ fontSize: 28, color: "#1c2f82" }}>📦 STANJE OD NULE</h2>
+            <p className="muted">
+              Početno stanje svih artikala je 0. Stanje se računa automatski: <b>ULAZ ROBE − POTVRĐENA TREBOVANJA = TRENUTNO STANJE</b>.
+              Samo poslato/kreirano trebovanje ne skida robu. Roba se skida tek kada magacioner potvrdi i završi trebovanje.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(250px,1fr))", gap: 14, marginTop: 16 }}>
+              {stock.map((s) => {
+                const ulaz = Number(s.inbound_qty || 0);
+                const izlaz = Number(s.outbound_qty || 0);
+                const racunato = Number(s.calculated_qty ?? (ulaz - izlaz));
+                return (
+                  <div key={s.article_id} style={{ border: "1px solid #dfe5ee", borderRadius: 18, padding: 14, background: "white" }}>
+                    <div style={{ fontWeight: 1000, color: "#1c2f82", fontSize: 18, minHeight: 44 }}>{s.naziv}</div>
+                    <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Šifra {s.sifra} · {s.barkod || "bez barkoda"}</div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
+                      <div style={{ padding: 10, borderRadius: 12, background: "#f3f4f6" }}>
+                        <div style={{ fontSize: 11, fontWeight: 900, color: "#6b7280" }}>POČETNO</div>
+                        <div style={{ fontSize: 22, fontWeight: 1000 }}>0 {s.jm}</div>
+                      </div>
+                      <div style={{ padding: 10, borderRadius: 12, background: "#ecfdf5" }}>
+                        <div style={{ fontSize: 11, fontWeight: 900, color: "#047857" }}>UKUPNO UŠLO</div>
+                        <div style={{ fontSize: 22, fontWeight: 1000, color: "#047857" }}>+{qtyLabel(ulaz)}</div>
+                      </div>
+                      <div style={{ padding: 10, borderRadius: 12, background: "#fff7ed" }}>
+                        <div style={{ fontSize: 11, fontWeight: 900, color: "#c2410c" }}>POTVRĐENO IZAŠLO</div>
+                        <div style={{ fontSize: 22, fontWeight: 1000, color: "#c2410c" }}>−{qtyLabel(izlaz)}</div>
+                      </div>
+                      <div style={{ padding: 10, borderRadius: 12, background: "#eef2ff" }}>
+                        <div style={{ fontSize: 11, fontWeight: 900, color: "#1c2f82" }}>TRENUTNO</div>
+                        <div style={{ fontSize: 22, fontWeight: 1000, color: "#1c2f82" }}>{qtyLabel(racunato)} {s.jm}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 10, padding: "9px 10px", borderRadius: 10, background: "#f8fafc", fontSize: 12, fontWeight: 900, color: "#475569", textAlign: "center" }}>
+                      0 + {qtyLabel(ulaz)} − {qtyLabel(izlaz)} = {qtyLabel(racunato)} {s.jm}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}
