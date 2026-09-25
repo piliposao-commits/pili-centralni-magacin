@@ -60,6 +60,18 @@ export async function POST(req: Request) {
     const before = new Map<string, number>();
     for (const row of beforeRows || []) before.set(String(row.article_id), Number(row.qty || 0));
 
+    // Zapamti i stanje ODREDIŠTA pre prenosa. Posle RPC-a proveravamo obe strane:
+    // CENTRALNI mora da bude umanjen, a prodavnica/magacin mora da bude uvećan.
+    const { data: destBeforeRows, error: destBeforeErr } = await admin
+      .from("cm_stock")
+      .select("article_id,qty")
+      .eq("location_id", destinationId)
+      .in("article_id", ids);
+    if (destBeforeErr) throw destBeforeErr;
+
+    const destBefore = new Map<string, number>();
+    for (const row of destBeforeRows || []) destBefore.set(String(row.article_id), Number(row.qty || 0));
+
     for (const line of lines) {
       const current = Number(before.get(line.article_id) || 0);
       if (current < line.qty) {
@@ -96,13 +108,23 @@ export async function POST(req: Request) {
     const after = new Map<string, number>();
     for (const row of afterRows || []) after.set(String(row.article_id), Number(row.qty || 0));
 
+    const { data: destAfterRows, error: destAfterErr } = await admin
+      .from("cm_stock")
+      .select("article_id,qty")
+      .eq("location_id", destinationId)
+      .in("article_id", ids);
+    if (destAfterErr) throw destAfterErr;
+
+    const destAfter = new Map<string, number>();
+    for (const row of destAfterRows || []) destAfter.set(String(row.article_id), Number(row.qty || 0));
+
     for (const line of lines) {
       const beforeQty = Number(before.get(line.article_id) || 0);
       const expectedQty = Math.max(0, beforeQty - line.qty);
       const afterQty = Number(after.get(line.article_id) ?? beforeQty);
 
-      // Ako je RPC već oduzeo količinu, ništa ne diramo.
-      // Ako nije, postavljamo tačno očekivano stanje.
+      // CENTRALNI MAGACIN: potvrđeno trebovanje / prenos UVEK oduzima količinu.
+      // Ako je RPC već oduzeo, ništa ne diramo. Ako nije, API ispravlja stanje.
       if (afterQty > expectedQty + 0.0001) {
         const { error: fixErr } = await admin
           .from("cm_stock")
@@ -117,9 +139,28 @@ export async function POST(req: Request) {
           );
         if (fixErr) throw fixErr;
       }
+
+      // ODREDIŠTE: ista potvrđena količina UVEK se dodaje prodavnici/magacinu.
+      const destBeforeQty = Number(destBefore.get(line.article_id) || 0);
+      const destExpectedQty = destBeforeQty + line.qty;
+      const destAfterQty = Number(destAfter.get(line.article_id) ?? destBeforeQty);
+      if (destAfterQty < destExpectedQty - 0.0001) {
+        const { error: destFixErr } = await admin
+          .from("cm_stock")
+          .upsert(
+            {
+              location_id: destinationId,
+              article_id: line.article_id,
+              qty: destExpectedQty,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "location_id,article_id" }
+          );
+        if (destFixErr) throw destFixErr;
+      }
     }
 
-    return NextResponse.json({ ok: true, data, stock_updated: true });
+    return NextResponse.json({ ok: true, data, stock_updated: true, rule: "ULAZ + / POTVRDJENO TREBOVANJE -" });
   } catch (e: any) {
     return NextResponse.json({ ok: false, message: e?.message || "Greška pri prenosu." }, { status: 400 });
   }
