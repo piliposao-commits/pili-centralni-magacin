@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { admin, requireSession } from "@/lib/server";
+import { reconcileCentralStock } from "@/lib/centralStock";
 
 type Line = { article_id: string; qty: number };
 
@@ -45,6 +46,11 @@ export async function POST(req: Request) {
       .limit(1)
       .single();
     if (centralErr || !central?.id) throw centralErr || new Error("Centralni magacin nije pronađen.");
+
+    // Pre novog pakovanja prvo preračunaj stanje iz kompletne istorije:
+    // ULAZI - sva ranije završena/spakovana TREBOVANJA.
+    // Tako i stara trebovanja odmah ulaze u stanje i ne mogu se zaboraviti.
+    await reconcileCentralStock(admin, String(central.id));
 
     // Zapamti stanje PRE RPC poziva. Ovo omogućava automatsku korekciju čak i ako je
     // u Supabase-u ostala starija verzija cm_create_transfer funkcije koja ne skida stanje.
