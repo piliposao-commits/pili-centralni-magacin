@@ -362,7 +362,7 @@ export default function TrebovanjePage() {
         {msg && <div className={msg.includes("poslato") ? "success" : "error"}>{msg}</div>}
 
         <section className="banner">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "stretch" }}>
+          <div className="trebToolbar">
             <input
               className="search"
               value={q}
@@ -411,43 +411,23 @@ export default function TrebovanjePage() {
             </div>
           )}
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))",
-              gap: 12,
-              marginTop: 14,
-            }}
-          >
+          <div className="trebGrid">
             {filtered.map((x) => {
               const requested = Number(qty[x.article_id] || 0);
               return (
                 <div
                   key={x.article_id}
+                  className="trebCard"
                   style={{
                     border: requested > 0 ? "3px solid #ef7d00" : "1px solid #dde3ed",
-                    borderRadius: 20,
-                    background: "white",
-                    padding: 14,
-                    boxShadow: "0 8px 24px #0000000b",
                   }}
                 >
-                  <div
-                    style={{
-                      height: 100,
-                      borderRadius: 14,
-                      background: "#f3f5f9",
-                      display: "grid",
-                      placeItems: "center",
-                      fontSize: 46,
-                      overflow: "hidden",
-                    }}
-                  >
+                  <div className="trebImageBox">
                     {(x.image_url || localImages[articleImageKey(x)]) ? (
                       <img
                         src={x.image_url || localImages[articleImageKey(x)]}
                         alt={x.naziv}
-                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                        className="trebImage"
                         onError={(e) => {
                           const fallback = localImages[articleImageKey(x)];
                           if (fallback && e.currentTarget.src !== fallback) e.currentTarget.src = fallback;
@@ -457,10 +437,10 @@ export default function TrebovanjePage() {
                       <span>📦</span>
                     )}
                   </div>
-                  <div style={{ fontWeight: 1000, fontSize: 16, color: "#1c2f82", marginTop: 10 }}>
+                  <div className="trebTitle">
                     {x.naziv}
                   </div>
-                  <div style={{ fontSize: 12, color: "#6b7280", minHeight: 42 }}>
+                  <div className="trebCode">
                     Šifra {x.sifra}<br />
                     {x.barkod ? (
                       <span style={{ display: "inline-block", marginTop: 3, fontWeight: 900, color: "#111827", letterSpacing: ".06em" }}>
@@ -470,14 +450,14 @@ export default function TrebovanjePage() {
                       <span style={{ display: "inline-block", marginTop: 3 }}>Bez barkoda</span>
                     )}
                   </div>
-                  <div style={{ marginTop: 8, padding: 9, borderRadius: 12, background: "#eef2ff", textAlign: "center" }}>
-                    <div style={{ fontSize: 11, fontWeight: 900 }}>NA STANJU</div>
-                    <div style={{ fontSize: 24, fontWeight: 1000, color: "#1c2f82" }}>
+                  <div className="trebStock">
+                    <div className="trebStockLabel">NA STANJU</div>
+                    <div className="trebStockValue">
                       {n(x.stanje)} {x.jm}
                     </div>
                   </div>
 
-                  <div className="field" style={{ marginBottom: 0 }}>
+                  <div className="field trebQtyField" style={{ marginBottom: 0 }}>
                     <label>Trebujem</label>
                     <input
                       type="number"

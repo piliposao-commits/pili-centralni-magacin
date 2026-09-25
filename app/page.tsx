@@ -454,6 +454,38 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     await load();
   }
 
+  async function markAdminRequestRead(r: Req) {
+    if (r.status !== "NOVO") return r;
+    try {
+      const res = await fetch("/api/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "status", request_id: r.id, status: "U PRIPREMI" }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) return r;
+
+      const updated = { ...r, status: "U PRIPREMI" };
+      setRequests((prev) => prev.map((x) => (x.id === r.id ? updated : x)));
+      return updated;
+    } catch {
+      return r;
+    }
+  }
+
+  async function openAdminRequest(r: Req) {
+    setAdminReq(r);
+    const updated = await markAdminRequestRead(r);
+    if (updated.status !== r.status) setAdminReq(updated);
+  }
+
+  async function printAdminRequest() {
+    if (!adminReq) return;
+    const updated = await markAdminRequestRead(adminReq);
+    if (updated.status !== adminReq.status) setAdminReq(updated);
+    window.setTimeout(() => window.print(), 80);
+  }
+
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
     setUser(null);
@@ -2229,7 +2261,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
               {requests.map((r) => (
                 <button
                   key={r.id}
-                  onClick={() => setAdminReq(r)}
+                  onClick={() => openAdminRequest(r)}
                   style={{
                     width:"100%", border:r.status==="NOVO" ? "3px solid #ef7d00" : "1px solid #dfe5ee",
                     background:r.status==="NOVO" ? "#fffaf4" : "white", borderRadius:18, padding:18,
@@ -2261,8 +2293,8 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                   <div className="muted">{new Date(adminReq.created_at).toLocaleString("sr-RS")} · Status: <b>{adminReq.status}</b></div>
                 </div>
                 <button className="btn btnGhost" onClick={() => setAdminReq(null)}>← NAZAD</button>
-                <button className="btn" style={{background:"#ef7d00",color:"white"}} onClick={() => window.print()}>
-                  🖨 ŠTAMPAJ / SAČUVAJ PDF
+                <button className="btn" style={{background:"#ef7d00",color:"white"}} onClick={printAdminRequest}>
+                  🖨 PRIHVATI / SAČUVAJ PDF
                 </button>
               </div>
 
