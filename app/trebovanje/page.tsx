@@ -21,6 +21,9 @@ type Stock = {
   image_url?: string | null;
 };
 
+const articleImageKey = (x: { sifra?: string; barkod?: string | null; article_id?: string }) =>
+  x.sifra ? `sifra:${x.sifra}` : x.barkod ? `barkod:${x.barkod}` : `id:${x.article_id || "unknown"}`;
+
 const n = (v: number) =>
   Number(v || 0).toLocaleString("sr-RS", { maximumFractionDigits: 3 });
 
@@ -29,6 +32,7 @@ export default function TrebovanjePage() {
   const [location, setLocation] = useState<Location | null>(null);
   const [availableLocations, setAvailableLocations] = useState<Location[]>([]);
   const [stock, setStock] = useState<Stock[]>([]);
+  const [localImages, setLocalImages] = useState<Record<string, string>>({});
   const [login, setLogin] = useState({ username: "", password: "" });
   const [q, setQ] = useState("");
   const [qty, setQty] = useState<Record<string, number>>({});
@@ -116,6 +120,13 @@ export default function TrebovanjePage() {
     setAvailableLocations(j.locations || []);
     setStock(j.stock || []);
   }
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("cm_article_images");
+      if (saved) setLocalImages(JSON.parse(saved));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     load();
@@ -432,11 +443,15 @@ export default function TrebovanjePage() {
                       overflow: "hidden",
                     }}
                   >
-                    {x.image_url ? (
+                    {(x.image_url || localImages[articleImageKey(x)]) ? (
                       <img
-                        src={x.image_url}
+                        src={x.image_url || localImages[articleImageKey(x)]}
                         alt={x.naziv}
                         style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                        onError={(e) => {
+                          const fallback = localImages[articleImageKey(x)];
+                          if (fallback && e.currentTarget.src !== fallback) e.currentTarget.src = fallback;
+                        }}
                       />
                     ) : (
                       <span>📦</span>
