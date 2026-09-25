@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type User = {
   id: string;
@@ -262,6 +262,95 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [savingInitial, setSavingInitial] = useState<string | null>(null);
   const [inventoryQty, setInventoryQty] = useState<Record<string, number>>({});
   const [savingInventory, setSavingInventory] = useState(false);
+  const [alertsEnabled, setAlertsEnabled] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState("default");
+  const alertAudioRef = useRef<HTMLAudioElement | null>(null);
+  const imageMigrationRunningRef = useRef(false);
+
+  async function migrateLocalImagesToServer(userInfo: User, rows: Stock[]) {
+    if (userInfo.role !== "ADMIN" || imageMigrationRunningRef.current) return;
+    let saved: Record<string, string> = {};
+    try {
+      saved = JSON.parse(localStorage.getItem("cm_article_images") || "{}");
+    } catch {
+      return;
+    }
+    const missing = rows.filter((x) => !x.image_url && String(saved[articleImageKey(x)] || "").startsWith("data:image/"));
+    if (!missing.length) return;
+
+    imageMigrationRunningRef.current = true;
+    try {
+      for (const article of missing) {
+        const dataUrl = saved[articleImageKey(article)];
+        try {
+          const blob = await fetch(dataUrl).then((r) => r.blob());
+          const ext = blob.type.includes("png") ? "png" : blob.type.includes("webp") ? "webp" : "jpg";
+          const fd = new FormData();
+          fd.append("article_id", article.article_id);
+          fd.append("file", new File([blob], `${article.sifra || article.article_id}.${ext}`, { type: blob.type || "image/jpeg" }));
+          const r = await fetch("/api/article-image", { method: "POST", body: fd });
+          const j = await r.json().catch(() => null);
+          if (r.ok && j?.ok && j.image_url) {
+            article.image_url = j.image_url;
+            saved[articleImageKey(article)] = j.image_url;
+          }
+        } catch {}
+      }
+      localStorage.setItem("cm_article_images", JSON.stringify(saved));
+      setImages((prev) => ({ ...prev, ...saved }));
+    } finally {
+      imageMigrationRunningRef.current = false;
+    }
+  }
+
+  function playRequestSound() {
+    try {
+      const audio = alertAudioRef.current;
+      if (!audio) return;
+      audio.currentTime = 0;
+      void audio.play().catch(() => {});
+    } catch {}
+  }
+
+  async function showRequestNotification(req: Req) {
+    playRequestSound();
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const title = `Novo trebovanje — ${req.location_name}`;
+    const body = `${req.requested_by || "Prodavnica"} · ${(req.lines || []).length} stavki`;
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification(title, {
+          body,
+          icon: "/pili-logo.png",
+          badge: "/pili-logo.png",
+          tag: `cm-request-${req.id}`,
+          data: { url: "/" },
+        });
+      } else {
+        new Notification(title, { body, icon: "/pili-logo.png", tag: `cm-request-${req.id}` });
+      }
+    } catch {}
+  }
+
+  async function enableRequestAlerts() {
+    if (!("Notification" in window)) {
+      setMsg("Ovaj pregledač ne podržava sistemske notifikacije.");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    if (permission === "granted") {
+      localStorage.setItem("cm_request_alerts", "1");
+      setAlertsEnabled(true);
+      playRequestSound();
+      setMsg("✓ Notifikacije i zvuk za nova trebovanja su uključeni.");
+    } else {
+      localStorage.removeItem("cm_request_alerts");
+      setAlertsEnabled(false);
+      setMsg("Notifikacije nisu dozvoljene u pregledaču.");
+    }
+  }
 
   async function load() {
     const r = await fetch("/api/data");
@@ -279,6 +368,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
       setInventoryQty(Object.fromEntries((j.stock || []).map((x: any) => [x.article_id, Number(x.stanje || 0)])));
       setLocations(j.locations || []);
       setRequests(j.requests || []);
+      void migrateLocalImagesToServer(j.user, j.stock || []);
     }
   }
 
@@ -287,8 +377,50 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     try {
       const saved = localStorage.getItem("cm_article_images");
       if (saved) setImages(JSON.parse(saved));
+      alertAudioRef.current = new Audio("/notification.wav");
+      alertAudioRef.current.preload = "auto";
+      if ("Notification" in window) {
+        setNotificationPermission(Notification.permission);
+        setAlertsEnabled(Notification.permission === "granted" && localStorage.getItem("cm_request_alerts") === "1");
+      }
     } catch {}
   }, []);
+
+  useEffect(() => {
+    if (!user || user.role !== "MAGACIONER") return;
+    let stopped = false;
+    let initialized = false;
+    const known = new Set<string>();
+
+    const checkRequests = async () => {
+      try {
+        const r = await fetch("/api/request", { cache: "no-store" });
+        const j = await r.json();
+        if (!r.ok || !j.ok || stopped) return;
+        const rows: Req[] = Array.isArray(j.requests) ? j.requests : [];
+        const activeRows = rows.filter((x) => x.status === "NOVO" || x.status === "U PRIPREMI");
+        setRequests(rows);
+        if (!initialized) {
+          activeRows.forEach((x) => known.add(x.id));
+          initialized = true;
+          return;
+        }
+        const fresh = activeRows.filter((x) => !known.has(x.id));
+        activeRows.forEach((x) => known.add(x.id));
+        for (const req of fresh.reverse()) {
+          setMsg(`🔔 Novo trebovanje: ${req.location_name} — ${(req.lines || []).length} stavki.`);
+          await showRequestNotification(req);
+        }
+      } catch {}
+    };
+
+    void checkRequests();
+    const timer = window.setInterval(checkRequests, 8000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -832,6 +964,36 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
               : tab === "menu" ? "Izaberi operaciju" : "Touchscreen rad magacionera"}
           </div>
         </section>
+
+        {user.role === "MAGACIONER" && (
+          <section
+            className="banner"
+            style={{
+              marginBottom: 14,
+              border: alertsEnabled ? "2px solid #15915f" : "2px solid #ef7d00",
+              background: alertsEnabled ? "#effbf5" : "#fff7ed",
+            }}
+          >
+            <div className="row">
+              <div className="grow">
+                <div style={{ fontWeight: 1000, fontSize: 18 }}>🔔 Obaveštenja za nova trebovanja</div>
+                <div className="muted">
+                  {alertsEnabled && notificationPermission === "granted"
+                    ? "UKLJUČENA — novo trebovanje aktivira zvuk i sistemsku notifikaciju."
+                    : "Uključi jednom na ovom uređaju magacionera."}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn"
+                onClick={enableRequestAlerts}
+                style={{ background: alertsEnabled ? "#15915f" : "#ef7d00", color: "white", minHeight: 48 }}
+              >
+                {alertsEnabled ? "✓ UKLJUČENO" : "UKLJUČI NOTIFIKACIJE"}
+              </button>
+            </div>
+          </section>
+        )}
 
         {user.role === "ADMIN" && (
           <div className="tabs">

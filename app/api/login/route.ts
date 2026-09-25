@@ -5,8 +5,9 @@ const TREBOVANJE_USERS: Record<string, { full_name: string; location_code: strin
   "mijatovic.olivera": { full_name: "Mijatović Olivera", location_code: "BOLJEVCI" },
   "popovic.milena": { full_name: "Popović Milena", location_code: null },
   "cumic.jelena": { full_name: "Ćumić Jelena", location_code: "PILI2" },
-  "bjelic.biljana": { full_name: "Bjelić Biljana", location_code: "BECMEN" },
+  "belic.biljana": { full_name: "Belić Biljana", location_code: "BECMEN" },
   "ivkovic.sonja": { full_name: "Ivković Sonja", location_code: null },
+  "stankovic.jelena": { full_name: "Stanković Jelena", location_code: null },
 };
 
 const MAGACIONERI: Record<string, { full_name: string; password: string; hash: string }> = {
@@ -115,7 +116,7 @@ export async function POST(req: Request) {
             username,
             full_name: preset.full_name,
             password_hash: HASH_1234,
-            role: "MAGACIONER",
+            role: "PRODAVNICA",
             active: true,
             location_code: wantedLocation,
           })
@@ -129,7 +130,7 @@ export async function POST(req: Request) {
           .update({
             full_name: preset.full_name,
             password_hash: HASH_1234,
-            role: "MAGACIONER",
+            role: "PRODAVNICA",
             active: true,
             location_code: wantedLocation,
           })

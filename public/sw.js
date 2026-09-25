@@ -1,4 +1,4 @@
-const CACHE_NAME = "pili-centralni-v1";
+const CACHE_NAME = "pili-centralni-v2";
 const APP_SHELL = [
   "/",
   "/trebovanje",
@@ -38,5 +38,22 @@ self.addEventListener("fetch", event => {
       caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
       return response;
     }))
+  );
+});
+
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const targetUrl = event.notification?.data?.url || "/";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+      for (const client of list) {
+        if ("focus" in client) {
+          client.navigate(targetUrl).catch(() => null);
+          return client.focus();
+        }
+      }
+      return clients.openWindow ? clients.openWindow(targetUrl) : null;
+    })
   );
 });

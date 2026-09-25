@@ -5,7 +5,7 @@ Koristi /api/trebovanje-login i automatski kreira/azurira ove usere:
 - mijatovic.olivera / 1234 (BOLJEVCI)
 - popovic.milena / 1234
 - cumic.jelena / 1234
-- bjelic.biljana / 1234
+- belic.biljana / 1234
 - ivkovic.sonja / 1234
 
 Kod korisnika bez lokacije nakon logovanja mora da se pojavi izbor prodavnice.

@@ -18,6 +18,7 @@ type Stock = {
   barkod: string | null;
   jm: string;
   stanje: number;
+  image_url?: string | null;
 };
 
 const n = (v: number) =>
@@ -428,9 +429,18 @@ export default function TrebovanjePage() {
                       display: "grid",
                       placeItems: "center",
                       fontSize: 46,
+                      overflow: "hidden",
                     }}
                   >
-                    📦
+                    {x.image_url ? (
+                      <img
+                        src={x.image_url}
+                        alt={x.naziv}
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                      />
+                    ) : (
+                      <span>📦</span>
+                    )}
                   </div>
                   <div style={{ fontWeight: 1000, fontSize: 16, color: "#1c2f82", marginTop: 10 }}>
                     {x.naziv}

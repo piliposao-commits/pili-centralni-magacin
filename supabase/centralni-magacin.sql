@@ -166,6 +166,7 @@ values
  ('mijatovic.olivera','Mijatović Olivera',extensions.crypt('1234',extensions.gen_salt('bf')),'PRODAVNICA',true,'BOLJEVCI'),
  ('popovic.milena','Popović Milena',extensions.crypt('1234',extensions.gen_salt('bf')),'PRODAVNICA',true,null),
  ('cumic.jelena','Ćumić Jelena',extensions.crypt('1234',extensions.gen_salt('bf')),'PRODAVNICA',true,'PILI2'),
- ('bjelic.biljana','Bjelić Biljana',extensions.crypt('1234',extensions.gen_salt('bf')),'PRODAVNICA',true,'BECMEN'),
- ('ivkovic.sonja','Ivković Sonja',extensions.crypt('1234',extensions.gen_salt('bf')),'PRODAVNICA',true,null)
+ ('belic.biljana','Belić Biljana',extensions.crypt('1234',extensions.gen_salt('bf')),'PRODAVNICA',true,'BECMEN'),
+ ('ivkovic.sonja','Ivković Sonja',extensions.crypt('1234',extensions.gen_salt('bf')),'PRODAVNICA',true,null),
+ ('stankovic.jelena','Stanković Jelena',extensions.crypt('1234',extensions.gen_salt('bf')),'PRODAVNICA',true,null)
 on conflict(username) do nothing;

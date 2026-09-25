@@ -4,7 +4,7 @@ Korisnici prodavnica rade direktno preko /trebovanje sa sifrom 1234:
 - mijatovic.olivera
 - popovic.milena
 - cumic.jelena
-- bjelic.biljana
+- belic.biljana
 - ivkovic.sonja
 
 Olivera je fiksno BOLJEVCI.

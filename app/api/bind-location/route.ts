@@ -5,8 +5,9 @@ const TREBOVANJE_USERS = new Set([
   "mijatovic.olivera",
   "popovic.milena",
   "cumic.jelena",
-  "bjelic.biljana",
+  "belic.biljana",
   "ivkovic.sonja",
+  "stankovic.jelena",
 ]);
 
 export async function POST(req: Request) {

@@ -16,7 +16,7 @@ KORISNICI ZA TREBOVANJE:
 - mijatovic.olivera / 1234 (vec vezana za PILI BOLJEVCI)
 - popovic.milena / 1234
 - cumic.jelena / 1234
-- bjelic.biljana / 1234
+- belic.biljana / 1234
 - ivkovic.sonja / 1234
 
 VAZNO POSLE RASPAKIVANJA:
