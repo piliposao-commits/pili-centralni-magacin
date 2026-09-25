@@ -249,6 +249,7 @@ export default function Page() {
   const [editingLine, setEditingLine] = useState<PreparedLine | null>(null);
   const [editingQty, setEditingQty] = useState(0);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [finishingRequest, setFinishingRequest] = useState(false);
 
   const [scan, setScan] = useState<any>(null);
   const [scanBusy, setScanBusy] = useState(false);
@@ -716,27 +717,32 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
   }
 
   async function finishRequestTransfer() {
-    if (!activeReq) return;
+    if (!activeReq || finishingRequest) return;
     const toSend = prepared.filter((x) => x.sendQty > 0);
     if (!toSend.length) return setMsg("Nema stavki za slanje.");
 
-    const r = await fetch("/api/transfer", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        destination_id: activeReq.location_id,
-        request_id: activeReq.id,
-        lines: toSend.map((x) => ({ article_id: x.article_id, qty: x.sendQty })),
-      }),
-    });
-    const j = await r.json();
-    if (!j.ok) return setMsg(j.message);
+    setFinishingRequest(true);
+    try {
+      const r = await fetch("/api/transfer", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          destination_id: activeReq.location_id,
+          request_id: activeReq.id,
+          lines: toSend.map((x) => ({ article_id: x.article_id, qty: x.sendQty })),
+        }),
+      });
+      const j = await r.json();
+      if (!j.ok) return setMsg(j.message);
 
-    setMsg("Trebovanje je završeno i roba je poslata.");
-    setActiveReq(null);
-    setPrepared([]);
-    setReviewOpen(false);
-    await load();
+      setMsg("Trebovanje je završeno. Poslate količine su oduzete iz centralnog magacina.");
+      setActiveReq(null);
+      setPrepared([]);
+      setReviewOpen(false);
+      await load();
+    } finally {
+      setFinishingRequest(false);
+    }
   }
 
   function addScanFiles(fileList?: FileList | File[] | null) {
@@ -1524,8 +1530,9 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                 className="btn"
                 style={{ background: "#15915f", color: "white", minHeight: 56, fontSize: 17 }}
                 onClick={finishRequestTransfer}
+                disabled={finishingRequest}
               >
-                ✓ POTVRDI I ZAVRŠI TREBOVANJE
+                {finishingRequest ? "KNJIŽIM STANJE…" : "✓ POTVRDI I ZAVRŠI TREBOVANJE"}
               </button>
             </div>
           </section>

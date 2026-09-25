@@ -122,19 +122,74 @@ end $$;
 
 create or replace function cm_create_transfer(p_user_id uuid,p_destination_id uuid,p_lines jsonb,p_request_id uuid default null)
 returns uuid language plpgsql security definer set search_path=public,extensions as $$
-declare d uuid; x jsonb; central uuid; q numeric; cur numeric; a cm_articles%rowtype;
+declare
+ d uuid;
+ x jsonb;
+ central uuid;
+ q numeric;
+ cur numeric;
+ a cm_articles%rowtype;
+ req_status text;
 begin
  select id into central from cm_locations where type='CENTRAL' limit 1;
- insert into cm_documents(type,status,source_location_id,destination_location_id,created_by) values('PRENOS','POSLATO',central,p_destination_id,p_user_id) returning id into d;
+ if central is null then raise exception 'Centralni magacin nije pronađen'; end if;
+
+ -- Ako se transfer radi iz trebovanja, zaključaj trebovanje i spreči duplo knjiženje.
+ if p_request_id is not null then
+  select status into req_status
+  from cm_documents
+  where id=p_request_id and type='TREBOVANJE'
+  for update;
+
+  if req_status is null then
+   raise exception 'Trebovanje nije pronađeno';
+  end if;
+
+  if req_status in ('POSLATO','PRIMLJENO') then
+   raise exception 'Trebovanje je već završeno. Stanje nije ponovo promenjeno.';
+  end if;
+ end if;
+
+ insert into cm_documents(type,status,source_location_id,destination_location_id,created_by)
+ values('PRENOS','POSLATO',central,p_destination_id,p_user_id)
+ returning id into d;
+
  for x in select * from jsonb_array_elements(p_lines) loop
-  q:=(x->>'qty')::numeric; select * into a from cm_articles where id=(x->>'article_id')::uuid;
-  select coalesce(qty,0) into cur from cm_stock where location_id=central and article_id=a.id for update;
-  if q<=0 or cur<q then raise exception 'Nema dovoljno robe za %. Na stanju: %',a.naziv,coalesce(cur,0); end if;
-  update cm_stock set qty=qty-q,updated_at=now() where location_id=central and article_id=a.id;
-  insert into cm_stock(location_id,article_id,qty) values(p_destination_id,a.id,q) on conflict(location_id,article_id) do update set qty=cm_stock.qty+excluded.qty,updated_at=now();
-  insert into cm_document_lines(document_id,article_id,sifra,naziv,barkod,jm,qty,price) values(d,a.id,a.sifra,a.naziv,a.barkod,a.jm,q,a.maloprodajna_cena);
+  q:=coalesce((x->>'qty')::numeric,0);
+  select * into a from cm_articles where id=(x->>'article_id')::uuid;
+  if a.id is null then raise exception 'Artikal nije pronađen'; end if;
+
+  select coalesce(qty,0) into cur
+  from cm_stock
+  where location_id=central and article_id=a.id
+  for update;
+
+  if q<=0 then continue; end if;
+  if coalesce(cur,0)<q then
+   raise exception 'Nema dovoljno robe za %. Na stanju: %',a.naziv,coalesce(cur,0);
+  end if;
+
+  -- KLJUČNA LOGIKA: tek na potvrdi magacionera oduzmi poslatu količinu iz CENTRALNOG MAGACINA.
+  update cm_stock
+  set qty=qty-q,updated_at=now()
+  where location_id=central and article_id=a.id;
+
+  -- Istu količinu dodaj na stanje odredišne prodavnice/magacina.
+  insert into cm_stock(location_id,article_id,qty)
+  values(p_destination_id,a.id,q)
+  on conflict(location_id,article_id)
+  do update set qty=cm_stock.qty+excluded.qty,updated_at=now();
+
+  insert into cm_document_lines(document_id,article_id,sifra,naziv,barkod,jm,qty,price)
+  values(d,a.id,a.sifra,a.naziv,a.barkod,a.jm,q,a.maloprodajna_cena);
  end loop;
- if p_request_id is not null then update cm_documents set status='POSLATO',updated_at=now() where id=p_request_id and type='TREBOVANJE'; end if;
+
+ if p_request_id is not null then
+  update cm_documents
+  set status='POSLATO',updated_at=now(),created_by=coalesce(created_by,p_user_id)
+  where id=p_request_id and type='TREBOVANJE';
+ end if;
+
  return d;
 end $$;
 
