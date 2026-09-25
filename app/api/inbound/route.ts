@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { admin, requireSession } from "@/lib/server";
-import { ensureInitialStockSnapshot } from "@/lib/initialStock";
 
 function cleanBarcode(value: unknown) {
   const s = String(value ?? "").trim();
@@ -77,7 +76,6 @@ export async function POST(req: Request) {
 
       const { data: cur, error: curError } = await admin.from("cm_stock").select("qty").eq("location_id", central.id).eq("article_id", article.id).maybeSingle();
       if (curError) throw curError;
-      await ensureInitialStockSnapshot(central.id, [{ article_id: article.id, qty: Number(cur?.qty || 0) }], session.id);
       const nextQty = Number(cur?.qty || 0) + x.kolicina;
       const { error: stockError } = await admin.from("cm_stock").upsert({ location_id: central.id, article_id: article.id, qty: nextQty, updated_at: new Date().toISOString() }, { onConflict: "location_id,article_id" });
       if (stockError) throw stockError;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { admin, requireSession } from "@/lib/server";
 import { ensureOneTimeCleanStart } from "@/lib/cleanStart";
+import { repairInitialStockFromHistory } from "@/lib/initialStock";
 
 const BUCKET = "cm-article-images";
 
@@ -28,6 +29,17 @@ export async function GET() {
     if (s.role !== "ADMIN" && s.role !== "MAGACIONER") return NextResponse.json({ ok: false, message: "Nedozvoljen pristup." }, { status: 403 });
     await ensureOneTimeCleanStart();
 
+    const { data: central, error: centralErr } = await admin
+      .from("cm_locations")
+      .select("id")
+      .eq("type", "CENTRAL")
+      .limit(1)
+      .single();
+    if (centralErr || !central?.id) throw centralErr || new Error("Centralni magacin nije pronađen.");
+
+    // Jednom vraća originalna početna stanja iz istorije kretanja, pa ih trajno zaključava.
+    await repairInitialStockFromHistory(central.id, s.id);
+
     const [{ data: locations }, { data: stock }, { data: reqs }, { data: initialDocs }, images] = await Promise.all([
       admin.from("cm_locations").select("id,code,name,type").eq("active", true).order("name"),
       admin.from("cm_stock_view").select("*").order("naziv"),
@@ -54,7 +66,7 @@ export async function GET() {
       const row = {
         ...x,
         image_url: images.get(String(x.article_id)) || null,
-        initial_qty: initialMap.has(String(x.article_id)) ? initialMap.get(String(x.article_id)) : current,
+        initial_qty: initialMap.has(String(x.article_id)) ? initialMap.get(String(x.article_id)) : 0,
         initial_locked: initialMap.has(String(x.article_id)),
       };
       return s.role === "ADMIN" ? row : { ...row, maloprodajna_cena: undefined, vrednost: undefined };

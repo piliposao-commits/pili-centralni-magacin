@@ -21,17 +21,19 @@ export async function POST(req: Request) {
       .single();
     if (centralErr || !central?.id) throw centralErr || new Error("Centralni magacin nije pronađen.");
 
-    const { error: stockErr } = await admin
-      .from("cm_stock")
-      .upsert(
-        { location_id: central.id, article_id: articleId, qty, updated_at: new Date().toISOString() },
-        { onConflict: "location_id,article_id" }
-      );
-    if (stockErr) throw stockErr;
-
+    // VAŽNO: ovde se čuva SAMO istorijsko početno stanje.
+    // Trenutno stanje (cm_stock) se ne dira.
     await saveInitialStockValue(central.id, articleId, qty, session.id);
 
-    return NextResponse.json({ ok: true, initial_qty: qty, current_qty: qty });
+    const { data: currentRow, error: currentErr } = await admin
+      .from("cm_stock")
+      .select("qty")
+      .eq("location_id", central.id)
+      .eq("article_id", articleId)
+      .maybeSingle();
+    if (currentErr) throw currentErr;
+
+    return NextResponse.json({ ok: true, initial_qty: qty, current_qty: Number(currentRow?.qty || 0) });
   } catch (e: any) {
     return NextResponse.json({ ok: false, message: e?.message || "Greška" }, { status: 400 });
   }

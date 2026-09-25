@@ -365,7 +365,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
       setStock(j.stock || []);
       const serverImages = Object.fromEntries((j.stock || []).filter((x: any) => x.image_url).map((x: any) => [articleImageKey(x), x.image_url]));
       setImages((prev) => ({ ...prev, ...serverImages }));
-      setInitialQty(Object.fromEntries((j.stock || []).map((x: any) => [x.article_id, Number(x.initial_qty ?? x.stanje ?? 0)])));
+      setInitialQty(Object.fromEntries((j.stock || []).map((x: any) => [x.article_id, Number(x.initial_qty ?? 0)])));
       setInventoryQty(Object.fromEntries((j.stock || []).map((x: any) => [x.article_id, Number(x.stanje || 0)])));
       setLocations(j.locations || []);
       setRequests(j.requests || []);
