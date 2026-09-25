@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { admin, requireSession } from "@/lib/server";
+import { ensureInitialStockSnapshot } from "@/lib/initialStock";
 
 type Line = { article_id: string; qty: number };
 
@@ -65,6 +66,14 @@ export async function POST(req: Request) {
         throw new Error(`Nema dovoljno robe. Na stanju ${current}, traženo ${line.qty}.`);
       }
     }
+
+    // Pre PRVOG kretanja svakog artikla automatski zaključaj početnu količinu.
+    // Tako kasnije oduzimamo samo TRENUTNO STANJE, a početno ostaje isto.
+    await ensureInitialStockSnapshot(
+      central.id,
+      lines.map((line) => ({ article_id: line.article_id, qty: Number(before.get(line.article_id) || 0) })),
+      s.id
+    );
 
     // Postojeći RPC i dalje knjiži dokument, destinaciju i stavke.
     const { data, error } = await admin.rpc("cm_create_transfer", {

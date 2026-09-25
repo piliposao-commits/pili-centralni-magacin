@@ -365,7 +365,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
       setStock(j.stock || []);
       const serverImages = Object.fromEntries((j.stock || []).filter((x: any) => x.image_url).map((x: any) => [articleImageKey(x), x.image_url]));
       setImages((prev) => ({ ...prev, ...serverImages }));
-      setInitialQty(Object.fromEntries((j.stock || []).map((x: any) => [x.article_id, Number(x.stanje || 0)])));
+      setInitialQty(Object.fromEntries((j.stock || []).map((x: any) => [x.article_id, Number(x.initial_qty ?? x.stanje ?? 0)])));
       setInventoryQty(Object.fromEntries((j.stock || []).map((x: any) => [x.article_id, Number(x.stanje || 0)])));
       setLocations(j.locations || []);
       setRequests(j.requests || []);
@@ -2078,13 +2078,14 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
         {user.role === "ADMIN" && tab === "pocetno" && (
           <section className="banner">
             <h2 style={{ fontSize: 28, color: "#1c2f82" }}>📦 POČETNO STANJE</h2>
-            <p className="muted">Svi artikli su sada postavljeni na 0. Ovde unosiš samo početnu količinu postojećeg artikla. Novi artikal se ne kuca ručno — ulazi samo preko slike/kalkulacije.</p>
+            <p className="muted">Početna količina ostaje sačuvana kao polazno stanje. Kada roba izađe kroz potvrđeno trebovanje, smanjuje se TRENUTNO STANJE, ali početna količina ostaje nepromenjena.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 14, marginTop: 16 }}>
               {stock.map((s) => (
                 <div key={s.article_id} style={{ border: "1px solid #dfe5ee", borderRadius: 18, padding: 14, background: "white" }}>
                   <div style={{ fontWeight: 1000, color: "#1c2f82", fontSize: 18, minHeight: 44 }}>{s.naziv}</div>
                   <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Šifra {s.sifra} · {s.barkod || "bez barkoda"}</div>
                   <div style={{ marginTop: 12, fontSize: 12, fontWeight: 900, color: "#6b7280" }}>POČETNA KOLIČINA ({s.jm})</div>
+                  <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 10, background: "#eef7ff", fontSize: 13, fontWeight: 900, color: "#1c2f82" }}>TRENUTNO STANJE: {qtyLabel(Number(s.stanje))} {s.jm}</div>
                   <input
                     type="number"
                     min="0"
