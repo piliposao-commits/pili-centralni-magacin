@@ -10,22 +10,26 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, message: "Nedostaje artikal." }, { status: 400 });
     }
 
-    const [{ data: article, error: articleErr }, { data: lines, error: linesErr }, { data: counts, error: countsErr }] = await Promise.all([
+    const [{ data: article, error: articleErr }, { data: lines, error: linesErr }] = await Promise.all([
       admin.from("cm_articles").select("id,sifra,naziv,barkod,jm").eq("id", articleId).single(),
       admin
         .from("cm_document_lines")
         .select("qty,document_id,cm_documents!inner(id,type,status,created_at,document_no,supplier,requested_by,destination_location_id)")
         .eq("article_id", articleId),
-      admin
-        .from("cm_inventory_history")
-        .select("id,qty,counted_by,created_at")
-        .eq("article_id", articleId)
-        .order("created_at", { ascending: false }),
     ]);
 
     if (articleErr) throw articleErr;
     if (linesErr) throw linesErr;
-    if (countsErr) throw countsErr;
+
+    // Popisi su dodatna istorija. Ako tabela još nije kreirana SQL-om,
+    // i dalje prikaži sve ulaze i izlaze umesto da ceo prozor padne.
+    let counts: any[] = [];
+    const countResult = await admin
+      .from("cm_inventory_history")
+      .select("id,qty,counted_by,created_at")
+      .eq("article_id", articleId)
+      .order("created_at", { ascending: false });
+    if (!countResult.error) counts = countResult.data || [];
 
     const destinationIds = [...new Set((lines || [])
       .map((row: any) => row?.cm_documents?.destination_location_id)
