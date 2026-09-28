@@ -60,6 +60,25 @@ type Req = {
   lines: RequestLine[];
 };
 
+type InboundLine = {
+  id: string;
+  sifra: string;
+  naziv: string;
+  barkod: string | null;
+  jm: string;
+  qty: number;
+  price: number;
+};
+
+type InboundDoc = {
+  id: string;
+  document_no: string | null;
+  supplier: string | null;
+  status: string;
+  created_at: string;
+  lines: InboundLine[];
+};
+
 type PreparedLine = RequestLine & {
   stock: number;
   sendQty: number;
@@ -253,6 +272,8 @@ export default function Page() {
   const [stock, setStock] = useState<Stock[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [requests, setRequests] = useState<Req[]>([]);
+  const [inboundDocs, setInboundDocs] = useState<InboundDoc[]>([]);
+  const [openInboundId, setOpenInboundId] = useState<string | null>(null);
   const [dest, setDest] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<TransferLine[]>([]);
@@ -388,6 +409,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
       setInventoryQty(Object.fromEntries((j.stock || []).map((x: any) => [x.article_id, Number(x.stanje || 0)])));
       setLocations(j.locations || []);
       setRequests(j.requests || []);
+      setInboundDocs(j.inbounds || []);
       void migrateLocalImagesToServer(j.user, j.stock || []);
     }
   }
@@ -1997,6 +2019,110 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                 </div>
               )}
             </div>
+
+            <section
+              style={{
+                marginTop: 18,
+                border: "1px solid #dbe2ef",
+                borderRadius: 18,
+                background: "white",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  padding: "16px 18px",
+                  background: "#f8faff",
+                  borderBottom: "1px solid #e5e7eb",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 20, fontWeight: 1000, color: "#1c2f82" }}>📚 PRETHODNI ULAZI ROBE</div>
+                  <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>Svi već proknjiženi ulazi, najnoviji prvi.</div>
+                </div>
+                <div style={{ fontWeight: 1000, color: "#1c2f82" }}>UKUPNO: {inboundDocs.length}</div>
+              </div>
+
+              {inboundDocs.length === 0 ? (
+                <div style={{ padding: 20, color: "#64748b", textAlign: "center" }}>Nema prethodnih ulaza.</div>
+              ) : (
+                <div style={{ display: "grid" }}>
+                  {inboundDocs.map((doc) => {
+                    const lines = Array.isArray(doc.lines) ? doc.lines : [];
+                    const totalQty = lines.reduce((sum, x) => sum + Number(x.qty || 0), 0);
+                    const totalValue = lines.reduce((sum, x) => sum + Number(x.qty || 0) * Number(x.price || 0), 0);
+                    const opened = openInboundId === doc.id;
+                    return (
+                      <div key={doc.id} style={{ borderBottom: "1px solid #eef2f7" }}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenInboundId(opened ? null : doc.id)}
+                          style={{
+                            width: "100%",
+                            display: "grid",
+                            gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr) auto",
+                            gap: 12,
+                            alignItems: "center",
+                            padding: "14px 18px",
+                            border: 0,
+                            background: opened ? "#eef2ff" : "white",
+                            cursor: "pointer",
+                            textAlign: "left",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 1000, color: "#0f172a" }}>{doc.supplier || "Dobavljač nije upisan"}</div>
+                            <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
+                              Dokument: <b>{doc.document_no || "bez broja"}</b>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 13, color: "#334155" }}>
+                            <div><b>{new Date(doc.created_at).toLocaleString("sr-RS")}</b></div>
+                            <div>{lines.length} stavki · {qtyLabel(totalQty)} kom</div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontWeight: 1000, color: "#1c2f82" }}>{money(totalValue)}</div>
+                            <div style={{ marginTop: 4, fontWeight: 1000, color: "#64748b" }}>{opened ? "▲ ZATVORI" : "▼ OTVORI"}</div>
+                          </div>
+                        </button>
+
+                        {opened && (
+                          <div style={{ padding: "0 18px 16px", background: "#fbfdff" }}>
+                            <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: 12, background: "white" }}>
+                              <table className="table" style={{ minWidth: 720 }}>
+                                <thead>
+                                  <tr>
+                                    <th>Šifra</th><th>Artikal</th><th>Barkod</th><th>JM</th><th className="right">Količina</th><th className="right">Cena</th><th className="right">Vrednost</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {lines.map((line) => (
+                                    <tr key={line.id}>
+                                      <td>{line.sifra}</td>
+                                      <td><b>{line.naziv}</b></td>
+                                      <td>{line.barkod || "—"}</td>
+                                      <td>{line.jm}</td>
+                                      <td className="right">{qtyLabel(Number(line.qty || 0))}</td>
+                                      <td className="right">{money(Number(line.price || 0))}</td>
+                                      <td className="right"><b>{money(Number(line.qty || 0) * Number(line.price || 0))}</b></td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
 
             {scanBusy && (
               <div

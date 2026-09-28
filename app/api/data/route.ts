@@ -43,10 +43,17 @@ export async function GET() {
     // Ovo automatski uključuje i STARA završena trebovanja.
     const { inboundMap, outboundMap } = await reconcileCentralStock(admin, String(central.id));
 
-    const [{ data: locations }, { data: stock }, { data: reqs }, images] = await Promise.all([
+    const [{ data: locations }, { data: stock }, { data: reqs }, { data: inbounds }, images] = await Promise.all([
       admin.from("cm_locations").select("id,code,name,type").eq("active", true).order("name"),
       admin.from("cm_stock_view").select("*").order("naziv"),
       admin.from("cm_requests_view").select("*").order("created_at", { ascending: false }).limit(100),
+      admin
+        .from("cm_documents")
+        .select("id,document_no,supplier,status,created_at,cm_document_lines(id,sifra,naziv,barkod,jm,qty,price)")
+        .eq("type", "ULAZ")
+        .eq("destination_location_id", central.id)
+        .order("created_at", { ascending: false })
+        .limit(100),
       articleImageMap(),
     ]);
 
@@ -66,7 +73,16 @@ export async function GET() {
       return s.role === "ADMIN" ? row : { ...row, maloprodajna_cena: undefined, vrednost: undefined };
     });
 
-    return NextResponse.json({ ok: true, user: s, locations, stock: safeStock, requests: reqs || [] });
+    const safeInbounds = (inbounds || []).map((d: any) => ({
+      id: d.id,
+      document_no: d.document_no || null,
+      supplier: d.supplier || null,
+      status: d.status,
+      created_at: d.created_at,
+      lines: Array.isArray(d.cm_document_lines) ? d.cm_document_lines : [],
+    }));
+
+    return NextResponse.json({ ok: true, user: s, locations, stock: safeStock, requests: reqs || [], inbounds: safeInbounds });
   } catch (e: any) {
     return NextResponse.json({ ok: false, message: e.message }, { status: e.message === "UNAUTHORIZED" ? 401 : 500 });
   }
