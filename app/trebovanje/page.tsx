@@ -461,11 +461,14 @@ export default function TrebovanjePage() {
                     <label>Trebujem</label>
                     <input
                       type="number"
+                      inputMode="numeric"
                       min="0"
-                      step="0.001"
+                      step="1"
+                      placeholder="0"
                       value={requested || ""}
+                      onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) =>
-                        setQty({ ...qty, [x.article_id]: Math.max(0, Number(e.target.value || 0)) })
+                        setQty({ ...qty, [x.article_id]: Math.max(0, Math.floor(Number(e.target.value || 0))) })
                       }
                       style={{ fontSize: 22, fontWeight: 900, textAlign: "center" }}
                     />
