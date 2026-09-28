@@ -305,6 +305,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [historyBusy, setHistoryBusy] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("SVE");
   const [notificationPermission, setNotificationPermission] = useState("default");
+  const [popisUnlocked, setPopisUnlocked] = useState(false);
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
   const imageMigrationRunningRef = useRef(false);
 
@@ -1037,6 +1038,24 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     }
   }
 
+  function openAdminTab(nextTab: string) {
+    if (nextTab === "popis") {
+      const code = window.prompt("Unesi šifru za pristup popisu:");
+      if (code !== "2709") {
+        setPopisUnlocked(false);
+        setMsg("Pogrešna šifra za popis.");
+        return;
+      }
+      setPopisUnlocked(true);
+      setMsg("");
+      setTab("popis");
+      return;
+    }
+
+    setPopisUnlocked(false);
+    setTab(nextTab);
+  }
+
   async function finishInventoryCount() {
     if (!stock.length) return setMsg("Nema artikala za popis. Prvo ubaci robu preko slike/kalkulacije.");
     setSavingInventory(true);
@@ -1140,11 +1159,23 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
 
         {user.role === "ADMIN" && (
           <div className="tabs">
-            <button className={`btn ${tab === "ulaz" ? "active" : "btnGhost"}`} onClick={() => setTab("ulaz")}>📷 Ulaz robe</button>
-            <button className={`btn ${tab === "pocetno" ? "active" : "btnGhost"}`} onClick={() => setTab("pocetno")}>📦 Početno stanje</button>
-            <button className={`btn ${tab === "popis" ? "active" : "btnGhost"}`} onClick={() => setTab("popis")}>🧾 Popis robe</button>
-            <button className={`btn ${tab === "stanje" ? "active" : "btnGhost"}`} onClick={() => setTab("stanje")}>Stanje / vrednost</button>
-            <button className={`btn ${tab === "trebovanja" ? "active" : "btnGhost"}`} onClick={() => setTab("trebovanja")}>Trebovanja {readyForAdmin.length > 0 ? `(${readyForAdmin.length} za knjiženje)` : ""}</button>
+            <button className={`btn ${tab === "ulaz" ? "active" : "btnGhost"}`} onClick={() => openAdminTab("ulaz")}>📷 Ulaz robe</button>
+            <button className={`btn ${tab === "pocetno" ? "active" : "btnGhost"}`} onClick={() => openAdminTab("pocetno")}>📦 Početno stanje</button>
+            <button className={`btn ${tab === "popis" ? "active" : "btnGhost"}`} onClick={() => openAdminTab("popis")}>🧾 Popis robe</button>
+            <button className={`btn ${tab === "stanje" ? "active" : "btnGhost"}`} onClick={() => openAdminTab("stanje")}>Stanje</button>
+            <button
+              className="btn"
+              onClick={() => openAdminTab("trebovanja")}
+              style={{
+                background: readyForAdmin.length > 0 ? "#ef7d00" : (tab === "trebovanja" ? "#1c2f82" : "#f3f6fb"),
+                color: readyForAdmin.length > 0 || tab === "trebovanja" ? "white" : "#172554",
+                border: readyForAdmin.length > 0 ? "2px solid #d96d00" : "1px solid transparent",
+                fontWeight: 1000,
+              }}
+            >
+              {readyForAdmin.length > 0 ? "📬" : "✉️"} Trebovanja
+              {readyForAdmin.length > 0 ? ` (${readyForAdmin.length})` : ""}
+            </button>
           </div>
         )}
 
@@ -2014,9 +2045,9 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
 
             <section
               style={{
-                marginTop: 18,
-                border: "1px solid #dbe2ef",
-                borderRadius: 18,
+                marginTop: 10,
+                border: "1px solid #e5e7eb",
+                borderRadius: 10,
                 background: "white",
                 overflow: "hidden",
               }}
@@ -2026,18 +2057,16 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 12,
-                  flexWrap: "wrap",
-                  padding: "16px 18px",
-                  background: "#f8faff",
-                  borderBottom: "1px solid #e5e7eb",
+                  gap: 8,
+                  padding: "8px 12px",
+                  background: "#fafafa",
+                  borderBottom: "1px solid #eef2f7",
                 }}
               >
-                <div>
-                  <div style={{ fontSize: 20, fontWeight: 1000, color: "#1c2f82" }}>📚 PRETHODNI ULAZI ROBE</div>
-                  <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>Svi već proknjiženi ulazi, najnoviji prvi.</div>
+                <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b", textTransform: "uppercase", letterSpacing: ".04em" }}>
+                  Prethodni ulazi
                 </div>
-                <div style={{ fontWeight: 1000, color: "#1c2f82" }}>UKUPNO: {inboundDocs.length}</div>
+                <div style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>{inboundDocs.length}</div>
               </div>
 
               {inboundDocs.length === 0 ? (
@@ -2060,7 +2089,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                             gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr) auto",
                             gap: 12,
                             alignItems: "center",
-                            padding: "14px 18px",
+                            padding: "9px 12px",
                             border: 0,
                             background: opened ? "#eef2ff" : "white",
                             cursor: "pointer",
@@ -2084,7 +2113,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                         </button>
 
                         {opened && (
-                          <div style={{ padding: "0 18px 16px", background: "#fbfdff" }}>
+                          <div style={{ padding: "0 12px 10px", background: "#fbfdff" }}>
                             <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: 12, background: "white" }}>
                               <table className="table" style={{ minWidth: 720 }}>
                                 <thead>
@@ -2420,7 +2449,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
         )}
 
 
-        {user.role === "ADMIN" && tab === "popis" && (
+        {user.role === "ADMIN" && tab === "popis" && popisUnlocked && (
           <section className="banner">
             <h2 style={{ fontSize: 28, color: "#1c2f82" }}>🧾 POPIS ROBE</h2>
             <p className="muted">Unesi stvarno fizičko stanje za svaki artikal. Kada klikneš ZAVRŠI POPIS, stanje centralnog magacina se postavlja tačno na unete količine.</p>
@@ -2486,9 +2515,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                           ) : (
                             <div style={{ width: 76, height: 76, borderRadius: 10, background: "#f7f9fc", display: "grid", placeItems: "center", fontSize: 28 }}>📷</div>
                           )}
-                          {s.image_url ? (
-                            <div style={{ fontWeight: 1000, color: "#16803a", fontSize: 11 }}>✓ SLIKA SAČUVANA</div>
-                          ) : (
+                          {s.image_url ? null : (
                             <>
                               <label style={{ cursor: "pointer", fontWeight: 900, color: "#1c2f82", fontSize: 12 }}>
                                 {pendingArticleImages[s.article_id] ? "✓ SLIKA IZABRANA" : "DODAJ SLIKU"}
@@ -2636,23 +2663,42 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
             </div>
 
             {bookedRequests.length > 0 && (
-              <div style={{marginTop:24}}>
-                <h3 style={{color:"#1c2f82"}}>Proknjižena trebovanja</h3>
-                <div className="cardList" style={{marginTop:10}}>
-                  {bookedRequests.slice(0, 20).map((r) => (
+              <details style={{marginTop:18}}>
+                <summary style={{
+                  cursor:"pointer",
+                  color:"#6b7280",
+                  fontSize:12,
+                  fontWeight:900,
+                  userSelect:"none"
+                }}>
+                  Završena trebovanja ({bookedRequests.length})
+                </summary>
+                <div style={{display:"grid", gap:6, marginTop:8}}>
+                  {bookedRequests.slice(0, 30).map((r) => (
                     <button
                       key={r.id}
                       onClick={() => openAdminRequest(r)}
                       style={{
-                        width:"100%", border:"1px solid #dfe5ee", background:"white",
-                        borderRadius:14, padding:14, textAlign:"left", cursor:"pointer", color:"inherit"
+                        width:"100%",
+                        border:"1px solid #d1d5db",
+                        background:"#f3f4f6",
+                        borderRadius:9,
+                        padding:"8px 10px",
+                        textAlign:"left",
+                        cursor:"pointer",
+                        color:"#6b7280",
+                        fontSize:12
                       }}
                     >
-                      <b>{r.location_name}</b> · {new Date(r.created_at).toLocaleString("sr-RS")} · PROKNJIŽENO
+                      <b style={{color:"#4b5563"}}>{r.location_name}</b>
+                      {" · "}
+                      {new Date(r.created_at).toLocaleString("sr-RS")}
+                      {" · "}
+                      <span style={{fontWeight:900}}>ZAVRŠENO</span>
                     </button>
                   ))}
                 </div>
-              </div>
+              </details>
             )}
           </section>
         )}
