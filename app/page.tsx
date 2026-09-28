@@ -757,12 +757,20 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     }
     const rows = (r.lines || []).map((l) => {
       const s = stock.find((x) => x.article_id === l.article_id);
-      const current = Number(s?.stanje || 0);
+      const currentAfterReservation = Number(s?.stanje || 0);
       const requested = Number(l.qty || 0);
+
+      // VAŽNO:
+      // Stanje se već umanji ČIM radnja pošalje trebovanje.
+      // Zato magacioner ne sme da proverava isto trebovanje ponovo prema
+      // već umanjenom stanju, jer bi drugo trebovanje od 100 izgledalo kao da nema robe.
+      // Za kontrolu ovog konkretnog trebovanja vraćamo njegovu rezervisanu količinu.
+      const availableForThisRequest = currentAfterReservation + requested;
+
       return {
         ...l,
-        stock: current,
-        sendQty: Math.min(requested, current),
+        stock: availableForThisRequest,
+        sendQty: requested,
         checked: false,
       };
     });
@@ -789,7 +797,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     const q = Math.max(0, Number(editingQty || 0));
     if (q > editingLine.stock)
       return setMsg(
-        `Ne može više od stanja: ${qtyLabel(editingLine.stock)} ${editingLine.jm}.`
+        `Ne može više od količine raspoložive za ovo trebovanje: ${qtyLabel(editingLine.stock)} ${editingLine.jm}.`
       );
     setPrepared((rows) =>
       rows.map((x) =>
@@ -1060,6 +1068,18 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
 
   return (
     <main className="page">
+      <div style={{
+        margin:"10px auto 14px",
+        maxWidth:1180,
+        padding:"10px 14px",
+        borderRadius:12,
+        background:"#e8f5e9",
+        color:"#14532d",
+        fontWeight:1000,
+        border:"2px solid #86c98f"
+      }}>
+        FIX 28.09 DRUGO TREBOVANJE
+      </div>
       <div style={{
         margin:"10px auto 14px",
         maxWidth:1180,
@@ -1525,7 +1545,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                           Traženo: <b>{qtyLabel(Number(l.qty))} {l.jm}</b>
                         </div>
                         <div>
-                          Na stanju: <b>{qtyLabel(l.stock)} {l.jm}</b>
+                          Rezervisano/raspoloživo za ovo trebovanje: <b>{qtyLabel(l.stock)} {l.jm}</b>
                         </div>
                         <div style={{ color: l.sendQty < Number(l.qty) ? "#b45309" : "#166534" }}>
                           Šaljem: <b>{qtyLabel(l.sendQty)} {l.jm}</b>
