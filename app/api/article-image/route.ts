@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { admin, requireSession } from "@/lib/server";
+import { admin, getSession } from "@/lib/server";
 
 const BUCKET = "cm-article-images";
 
@@ -18,7 +18,16 @@ async function ensureBucket() {
 
 export async function POST(req: Request) {
   try {
-    await requireSession("ADMIN");
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ ok: false, message: "UNAUTHORIZED" }, { status: 401 });
+    }
+
+    // Slike artikala mogu da čuvaju ADMIN i MAGACIONER.
+    // PRODAVNICA nema dozvolu za menjanje master podataka artikla.
+    if (session.role !== "ADMIN" && session.role !== "MAGACIONER") {
+      return NextResponse.json({ ok: false, message: "FORBIDDEN" }, { status: 403 });
+    }
     const fd = await req.formData();
     const articleId = String(fd.get("article_id") || "").trim();
     const file = fd.get("file");
