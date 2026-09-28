@@ -498,20 +498,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (!user) return;
-
-    if (user.role === "ADMIN") {
-      const requestedTab =
-        typeof window !== "undefined"
-          ? new URLSearchParams(window.location.search).get("tab")
-          : null;
-
-      if (requestedTab && ["ulaz", "pocetno", "popis", "stanje", "trebovanja"].includes(requestedTab)) {
-        if (tab !== requestedTab) setTab(requestedTab);
-        return;
-      }
-
-      if (tab === "menu") setTab("ulaz");
-    }
+    if (user.role === "ADMIN" && tab === "menu") setTab("ulaz");
   }, [user, tab]);
 
   function saveImages(next: Record<string, string>) {
@@ -1081,42 +1068,6 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
 
   return (
     <main className="page">
-      <div style={{
-        margin:"10px auto 14px",
-        maxWidth:1180,
-        padding:"9px 14px",
-        borderRadius:12,
-        background:"#e8f5e9",
-        color:"#14532d",
-        fontWeight:1000,
-        border:"2px solid #86c98f"
-      }}>
-        FIX ADMIN STANJE 28.09
-      </div>
-      <div style={{
-        margin:"10px auto 14px",
-        maxWidth:1180,
-        padding:"10px 14px",
-        borderRadius:12,
-        background:"#e8f5e9",
-        color:"#14532d",
-        fontWeight:1000,
-        border:"2px solid #86c98f"
-      }}>
-        FIX 28.09 DRUGO TREBOVANJE
-      </div>
-      <div style={{
-        margin:"10px auto 14px",
-        maxWidth:1180,
-        padding:"10px 14px",
-        borderRadius:12,
-        background:"#fff3cd",
-        color:"#7a5200",
-        fontWeight:1000,
-        border:"2px solid #f2c94c"
-      }}>
-        VERZIJA 28.09 ISTORIJA ARTIKLA
-      </div>
       <header className="top" style={{ background: "#1c2f82" }}>
         <div>
           <strong>PILI — CENTRALNI MAGACIN</strong>
@@ -1179,40 +1130,13 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
         )}
 
         {user.role === "ADMIN" && (
-          <>
-            <div style={{ margin: "10px 0 12px" }}>
-              <a
-                href="/?tab=stanje"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minHeight: 46,
-                  padding: "0 18px",
-                  borderRadius: 12,
-                  background: "#1c2f82",
-                  color: "white",
-                  fontWeight: 1000,
-                  textDecoration: "none",
-                }}
-              >
-                📦 OTVORI STANJE ARTIKALA
-              </a>
-            </div>
-            <div className="tabs">
+          <div className="tabs">
             <button className={`btn ${tab === "ulaz" ? "active" : "btnGhost"}`} onClick={() => setTab("ulaz")}>📷 Ulaz robe</button>
             <button className={`btn ${tab === "pocetno" ? "active" : "btnGhost"}`} onClick={() => setTab("pocetno")}>📦 Početno stanje</button>
             <button className={`btn ${tab === "popis" ? "active" : "btnGhost"}`} onClick={() => setTab("popis")}>🧾 Popis robe</button>
-            <a
-              href="/?tab=stanje"
-              className={`btn ${tab === "stanje" ? "active" : "btnGhost"}`}
-              style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-            >
-              Stanje / vrednost
-            </a>
+            <button className={`btn ${tab === "stanje" ? "active" : "btnGhost"}`} onClick={() => setTab("stanje")}>Stanje / vrednost</button>
             <button className={`btn ${tab === "trebovanja" ? "active" : "btnGhost"}`} onClick={() => setTab("trebovanja")}>Trebovanja {readyForAdmin.length > 0 ? `(${readyForAdmin.length} za knjiženje)` : ""}</button>
-            </div>
-          </>
+          </div>
         )}
 
         {user.role === "MAGACIONER" && tab !== "menu" && (
