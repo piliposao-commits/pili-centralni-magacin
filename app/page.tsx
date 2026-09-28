@@ -757,20 +757,15 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     }
     const rows = (r.lines || []).map((l) => {
       const s = stock.find((x) => x.article_id === l.article_id);
-      const currentAfterReservation = Number(s?.stanje || 0);
+      const current = Number(s?.stanje || 0);
       const requested = Number(l.qty || 0);
 
-      // VAŽNO:
-      // Stanje se već umanji ČIM radnja pošalje trebovanje.
-      // Zato magacioner ne sme da proverava isto trebovanje ponovo prema
-      // već umanjenom stanju, jer bi drugo trebovanje od 100 izgledalo kao da nema robe.
-      // Za kontrolu ovog konkretnog trebovanja vraćamo njegovu rezervisanu količinu.
-      const availableForThisRequest = currentAfterReservation + requested;
-
+      // Stanje još NIJE umanjeno dok magacioner ne potvrdi pakovanje.
+      // Zato ovde proveravamo stvarno trenutno stanje centralnog magacina.
       return {
         ...l,
-        stock: availableForThisRequest,
-        sendQty: requested,
+        stock: current,
+        sendQty: Math.min(requested, current),
         checked: false,
       };
     });
@@ -797,7 +792,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     const q = Math.max(0, Number(editingQty || 0));
     if (q > editingLine.stock)
       return setMsg(
-        `Ne može više od količine raspoložive za ovo trebovanje: ${qtyLabel(editingLine.stock)} ${editingLine.jm}.`
+        `Ne može više od stanja: ${qtyLabel(editingLine.stock)} ${editingLine.jm}.`
       );
     setPrepared((rows) =>
       rows.map((x) =>
@@ -1521,7 +1516,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                           Traženo: <b>{qtyLabel(Number(l.qty))} {l.jm}</b>
                         </div>
                         <div>
-                          Rezervisano/raspoloživo za ovo trebovanje: <b>{qtyLabel(l.stock)} {l.jm}</b>
+                          Na stanju: <b>{qtyLabel(l.stock)} {l.jm}</b>
                         </div>
                         <div style={{ color: l.sendQty < Number(l.qty) ? "#b45309" : "#166534" }}>
                           Šaljem: <b>{qtyLabel(l.sendQty)} {l.jm}</b>

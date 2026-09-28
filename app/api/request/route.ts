@@ -126,27 +126,16 @@ export async function POST(req: Request) {
     });
     if (error) throw error;
 
-    // Čim je trebovanje kreirano, odmah se skida/rezerviše količina iz centralnog stanja.
-    const { data: central, error: centralErr } = await admin
-      .from("cm_locations")
-      .select("id")
-      .eq("type", "CENTRAL")
-      .limit(1)
-      .single();
-
-    if (centralErr || !central?.id) {
-      throw centralErr || new Error("Centralni magacin nije pronađen.");
-    }
-
-    await reconcileCentralStock(admin, String(central.id));
-
+    // Radnja samo šalje trebovanje.
+    // Centralno stanje se NE menja u ovom trenutku.
+    // Skidanje se radi tek kada magacioner potvrdi pakovanje.
     return NextResponse.json({
       ok: true,
       data,
       location: location.name,
       requested_by: session.full_name,
-      stock_updated: true,
-      rule: "ULAZ - SVA AKTIVNA TREBOVANJA",
+      stock_updated: false,
+      rule: "STANJE SE SKIDA TEK POSLE POTVRDE MAGACIONERA",
     });
   } catch (e: any) {
     return NextResponse.json(

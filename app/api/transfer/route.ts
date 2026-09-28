@@ -34,7 +34,7 @@ export async function POST(req: Request) {
         .maybeSingle();
       if (requestErr) throw requestErr;
       if (!requestRow) throw new Error("Trebovanje nije pronađeno.");
-      if (["POSLATO", "PRIMLJENO", "ZAVRSENO"].includes(String(requestRow.status || "").toUpperCase())) {
+      if (["PRIMLJENO", "ZAVRSENO"].includes(String(requestRow.status || "").toUpperCase())) {
         throw new Error("Trebovanje je već završeno. Stanje nije ponovo promenjeno.");
       }
     }

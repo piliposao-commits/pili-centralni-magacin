@@ -42,25 +42,19 @@ export async function reconcileCentralStock(admin: any, centralId: string): Prom
       }
     }
 
-    // NOVO PRAVILO:
-    // ČIM PRODAVNICA UNESE TREBOVANJE, količina se odmah skida/rezerviše iz centralnog stanja.
-    // Status magacionera više ne utiče na računicu.
-    // Samo stvarno otkazano/stornirano/odbijeno trebovanje se ne računa.
-    if (type === "TREBOVANJE" && new Date(d?.created_at || 0).getTime() >= REQUEST_LEDGER_START) {
-      const excludedStatuses = new Set([
-        "OTKAZANO",
-        "STORNIRANO",
-        "ODBIJENO",
-        "CANCELLED",
-        "CANCELED",
-      ]);
-
-      if (!excludedStatuses.has(status)) {
-        for (const line of lines) {
-          const id = String(line?.article_id || "");
-          if (!id) continue;
-          outboundMap.set(id, Number(outboundMap.get(id) || 0) + Number(line?.qty || 0));
-        }
+    // ISPRAVNO PRAVILO:
+    // Trebovanje NE skida stanje kada ga radnja pošalje.
+    // Stanje se umanjuje tek kada MAGACIONER potvrdi da je roba spakovana/odložena,
+    // odnosno kada trebovanje dobije status POSLATO (ili kasnije PRIMLJENO/ZAVRSENO).
+    if (
+      type === "TREBOVANJE" &&
+      new Date(d?.created_at || 0).getTime() >= REQUEST_LEDGER_START &&
+      ["POSLATO", "PRIMLJENO", "ZAVRSENO"].includes(status)
+    ) {
+      for (const line of lines) {
+        const id = String(line?.article_id || "");
+        if (!id) continue;
+        outboundMap.set(id, Number(outboundMap.get(id) || 0) + Number(line?.qty || 0));
       }
     }
   }
