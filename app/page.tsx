@@ -66,6 +66,20 @@ type PreparedLine = RequestLine & {
   checked: boolean;
 };
 
+type HistoryEvent = {
+  kind: "ULAZ" | "TREBOVANJE" | "PRENOS" | "POPIS";
+  created_at: string;
+  qty: number;
+  delta: number | null;
+  detail: string;
+  status: string;
+};
+
+type ArticleHistory = {
+  article: { id: string; sifra: string; naziv: string; barkod: string | null; jm: string };
+  events: HistoryEvent[];
+};
+
 const money = (n: any) =>
   Number(n || 0).toLocaleString("sr-RS", {
     minimumFractionDigits: 2,
@@ -265,6 +279,10 @@ export default function Page() {
 const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [inventoryQty, setInventoryQty] = useState<Record<string, number>>({});
   const [savingInventory, setSavingInventory] = useState(false);
+  const [historyArticle, setHistoryArticle] = useState<Stock | null>(null);
+  const [articleHistory, setArticleHistory] = useState<ArticleHistory | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState("SVE");
   const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState("default");
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -347,7 +365,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
       localStorage.setItem("cm_request_alerts", "1");
       setAlertsEnabled(true);
       playRequestSound();
-      setMsg("✓ Notifikacije i zvuk za nova trebovanja su uključeni.");
+      setMsg(user?.role === "ADMIN" ? "✓ Admin notifikacije za knjiženje su uključene." : "✓ Notifikacije i zvuk za nova trebovanja su uključeni.");
     } else {
       localStorage.removeItem("cm_request_alerts");
       setAlertsEnabled(false);
@@ -425,6 +443,60 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
   }, [user?.id]);
 
   useEffect(() => {
+    if (!user || user.role !== "ADMIN") return;
+    let stopped = false;
+    let initialized = false;
+    const known = new Set<string>();
+
+    const checkAdminRequests = async () => {
+      try {
+        const r = await fetch("/api/request", { cache: "no-store" });
+        const j = await r.json();
+        if (!r.ok || !j.ok || stopped) return;
+        const rows: Req[] = Array.isArray(j.requests) ? j.requests : [];
+        const readyRows = rows.filter((x) => x.status === "POSLATO");
+        setRequests(rows);
+        if (!initialized) {
+          readyRows.forEach((x) => known.add(x.id));
+          initialized = true;
+          return;
+        }
+        const fresh = readyRows.filter((x) => !known.has(x.id));
+        readyRows.forEach((x) => known.add(x.id));
+        for (const req of fresh.reverse()) {
+          setMsg(`🔔 Spakovano trebovanje za knjiženje: ${req.location_name}.`);
+          playRequestSound();
+          if ("Notification" in window && Notification.permission === "granted") {
+            try {
+              const title = `Za knjiženje — ${req.location_name}`;
+              const body = `${req.requested_by || "Prodavnica"} · ${(req.lines || []).length} stavki`;
+              if ("serviceWorker" in navigator) {
+                const reg = await navigator.serviceWorker.ready;
+                await reg.showNotification(title, {
+                  body,
+                  icon: "/pili-logo.png",
+                  badge: "/pili-logo.png",
+                  tag: `cm-admin-${req.id}`,
+                  data: { url: "/" },
+                });
+              } else {
+                new Notification(title, { body, icon: "/pili-logo.png", tag: `cm-admin-${req.id}` });
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+    };
+
+    void checkAdminRequests();
+    const timer = window.setInterval(checkAdminRequests, 8000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
     if (!user) return;
     if (user.role === "ADMIN" && tab === "menu") setTab("ulaz");
   }, [user, tab]);
@@ -456,36 +528,58 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     await load();
   }
 
-  async function markAdminRequestRead(r: Req) {
-    if (r.status !== "NOVO") return r;
-    try {
-      const res = await fetch("/api/request", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "status", request_id: r.id, status: "U PRIPREMI" }),
-      });
-      const j = await res.json();
-      if (!res.ok || !j.ok) return r;
-
-      const updated = { ...r, status: "U PRIPREMI" };
-      setRequests((prev) => prev.map((x) => (x.id === r.id ? updated : x)));
-      return updated;
-    } catch {
-      return r;
-    }
-  }
-
   async function openAdminRequest(r: Req) {
     setAdminReq(r);
-    const updated = await markAdminRequestRead(r);
-    if (updated.status !== r.status) setAdminReq(updated);
+  }
+
+  async function bookAdminRequest(printAfter = false) {
+    if (!adminReq) return;
+    if (adminReq.status === "PRIMLJENO") {
+      if (printAfter) window.setTimeout(() => window.print(), 80);
+      return;
+    }
+    if (adminReq.status !== "POSLATO") {
+      setMsg("Trebovanje još nije potvrđeno od magacionera.");
+      return;
+    }
+
+    const res = await fetch("/api/request", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "status", request_id: adminReq.id, status: "PRIMLJENO" }),
+    });
+    const j = await res.json();
+    if (!res.ok || !j.ok) {
+      setMsg(j.message || "Greška pri knjiženju trebovanja.");
+      return;
+    }
+
+    const updated = { ...adminReq, status: "PRIMLJENO" };
+    setAdminReq(updated);
+    setRequests((prev) => prev.map((x) => x.id === updated.id ? updated : x));
+    setMsg("✓ Trebovanje je proknjiženo.");
+    if (printAfter) window.setTimeout(() => window.print(), 120);
   }
 
   async function printAdminRequest() {
-    if (!adminReq) return;
-    const updated = await markAdminRequestRead(adminReq);
-    if (updated.status !== adminReq.status) setAdminReq(updated);
-    window.setTimeout(() => window.print(), 80);
+    await bookAdminRequest(true);
+  }
+
+  async function openArticleHistory(article: Stock) {
+    setHistoryArticle(article);
+    setArticleHistory(null);
+    setHistoryBusy(true);
+    setHistoryFilter("SVE");
+    try {
+      const r = await fetch(`/api/article-history?article_id=${encodeURIComponent(article.article_id)}`, { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.message || "Greška pri učitavanju istorije.");
+      setArticleHistory({ article: j.article, events: j.events || [] });
+    } catch (e: any) {
+      setMsg(e?.message || "Greška pri učitavanju istorije artikla.");
+    } finally {
+      setHistoryBusy(false);
+    }
   }
 
   async function logout() {
@@ -719,24 +813,24 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
 
   async function finishRequestTransfer() {
     if (!activeReq || finishingRequest) return;
-    const toSend = prepared.filter((x) => x.sendQty > 0);
-    if (!toSend.length) return setMsg("Nema stavki za slanje.");
+    const toSend = prepared.filter((x) => x.sendQty >= 0 && x.checked);
+    if (!toSend.length) return setMsg("Nema čekiranih stavki za potvrdu.");
 
     setFinishingRequest(true);
     try {
-      const r = await fetch("/api/transfer", {
+      const r = await fetch("/api/request", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          destination_id: activeReq.location_id,
+          action: "pack",
           request_id: activeReq.id,
-          lines: toSend.map((x) => ({ article_id: x.article_id, qty: x.sendQty })),
+          lines: prepared.map((x) => ({ article_id: x.article_id, qty: x.checked ? x.sendQty : 0 })),
         }),
       });
       const j = await r.json();
-      if (!j.ok) return setMsg(j.message);
+      if (!j.ok) return setMsg(j.message || "Greška pri potvrdi pakovanja.");
 
-      setMsg("Trebovanje je završeno. Poslate količine su oduzete iz centralnog magacina.");
+      setMsg("✓ Roba je spakovana. Admin je dobio trebovanje za knjiženje.");
       setActiveReq(null);
       setPrepared([]);
       setReviewOpen(false);
@@ -961,6 +1055,8 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
   const currentDest = stores.find((x) => x.id === dest);
   const unopenedRequests = requests.filter((r) => r.status === "NOVO");
   const workRequests = requests.filter((r) => r.status === "NOVO" || r.status === "U PRIPREMI");
+  const readyForAdmin = requests.filter((r) => r.status === "POSLATO");
+  const bookedRequests = requests.filter((r) => r.status === "PRIMLJENO");
 
   return (
     <main className="page">
@@ -989,7 +1085,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
           </div>
         </section>
 
-        {user.role === "MAGACIONER" && (
+        {(user.role === "MAGACIONER" || user.role === "ADMIN") && (
           <section
             className="banner"
             style={{
@@ -1000,11 +1096,17 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
           >
             <div className="row">
               <div className="grow">
-                <div style={{ fontWeight: 1000, fontSize: 18 }}>🔔 Obaveštenja za nova trebovanja</div>
+                <div style={{ fontWeight: 1000, fontSize: 18 }}>
+                  🔔 {user.role === "MAGACIONER" ? "Obaveštenja za nova trebovanja" : "Obaveštenja za knjiženje"}
+                </div>
                 <div className="muted">
                   {alertsEnabled && notificationPermission === "granted"
-                    ? "UKLJUČENA — novo trebovanje aktivira zvuk i sistemsku notifikaciju."
-                    : "Uključi jednom na ovom uređaju magacionera."}
+                    ? user.role === "MAGACIONER"
+                      ? "UKLJUČENA — novo trebovanje iz radnje aktivira zvuk i sistemsku notifikaciju."
+                      : "UKLJUČENA — kada magacioner potvrdi pakovanje, admin dobija zvuk i sistemsku notifikaciju."
+                    : user.role === "MAGACIONER"
+                      ? "Uključi jednom na ovom uređaju magacionera."
+                      : "Uključi jednom na admin uređaju."}
                 </div>
               </div>
               <button
@@ -1025,7 +1127,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
             <button className={`btn ${tab === "pocetno" ? "active" : "btnGhost"}`} onClick={() => setTab("pocetno")}>📦 Početno stanje</button>
             <button className={`btn ${tab === "popis" ? "active" : "btnGhost"}`} onClick={() => setTab("popis")}>🧾 Popis robe</button>
             <button className={`btn ${tab === "stanje" ? "active" : "btnGhost"}`} onClick={() => setTab("stanje")}>Stanje / vrednost</button>
-            <button className={`btn ${tab === "trebovanja" ? "active" : "btnGhost"}`} onClick={() => setTab("trebovanja")}>Trebovanja {unopenedRequests.length > 0 ? `(${unopenedRequests.length} neotvorenih)` : ""}</button>
+            <button className={`btn ${tab === "trebovanja" ? "active" : "btnGhost"}`} onClick={() => setTab("trebovanja")}>Trebovanja {user.role === "ADMIN" && readyForAdmin.length > 0 ? `(${readyForAdmin.length} za knjiženje)` : user.role === "MAGACIONER" && unopenedRequests.length > 0 ? `(${unopenedRequests.length} novih)` : ""}</button>
           </div>
         )}
 
@@ -1518,7 +1620,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                 onClick={finishRequestTransfer}
                 disabled={finishingRequest}
               >
-                {finishingRequest ? "KNJIŽIM STANJE…" : "✓ POTVRDI I ZAVRŠI TREBOVANJE"}
+                {finishingRequest ? "POTVRĐUJEM…" : "✓ ROBA SPAKOVANA / POŠALJI ADMINU"}
               </button>
             </div>
           </section>
@@ -1557,6 +1659,95 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                 <button className="btn grow" style={{ background: "#ef7d00", color: "white" }} onClick={saveEdit}>SAČUVAJ</button>
               </div>
             </div>
+          </div>
+        )}
+
+        {historyArticle && (
+          <div
+            onClick={() => setHistoryArticle(null)}
+            style={{
+              position:"fixed", inset:0, background:"rgba(15,23,42,.58)", zIndex:100,
+              display:"grid", placeItems:"center", padding:16
+            }}
+          >
+            <section
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width:"min(900px,96vw)", maxHeight:"90vh", overflow:"auto",
+                background:"white", borderRadius:24, padding:22, boxShadow:"0 25px 80px rgba(0,0,0,.28)"
+              }}
+            >
+              <div className="row">
+                <div className="grow">
+                  <div style={{fontSize:12,fontWeight:1000,color:"#6b7280"}}>ISTORIJA ARTIKLA</div>
+                  <h2 style={{margin:"4px 0",color:"#1c2f82"}}>{historyArticle.naziv}</h2>
+                  <div className="muted">Šifra {historyArticle.sifra} · {historyArticle.barkod || "bez barkoda"}</div>
+                  <div style={{marginTop:8,fontWeight:1000,color:"#1c2f82"}}>
+                    Trenutno stanje: {qtyLabel(Number(historyArticle.stanje))} {historyArticle.jm}
+                  </div>
+                </div>
+                <button className="btn btnGhost" onClick={() => setHistoryArticle(null)}>✕ ZATVORI</button>
+              </div>
+
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:18}}>
+                {["SVE","ULAZ","TREBOVANJE","POPIS"].map((f) => (
+                  <button
+                    key={f}
+                    className={`btn ${historyFilter === f ? "active" : "btnGhost"}`}
+                    onClick={() => setHistoryFilter(f)}
+                  >
+                    {f === "SVE" ? "Sve" : f === "ULAZ" ? "Ulazi" : f === "TREBOVANJE" ? "Izlazi / trebovanja" : "Popisi"}
+                  </button>
+                ))}
+              </div>
+
+              {historyBusy && <p className="muted" style={{marginTop:20}}>Učitavanje istorije...</p>}
+
+              {!historyBusy && articleHistory && (
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,marginTop:18}}>
+                    <div style={{padding:14,borderRadius:14,background:"#ecfdf5"}}>
+                      <div style={{fontSize:11,fontWeight:1000,color:"#047857"}}>UKUPNO ULAZA</div>
+                      <div style={{fontSize:24,fontWeight:1000}}>+{qtyLabel(articleHistory.events.filter(e=>e.kind==="ULAZ").reduce((a,e)=>a+Number(e.qty||0),0))}</div>
+                    </div>
+                    <div style={{padding:14,borderRadius:14,background:"#fff7ed"}}>
+                      <div style={{fontSize:11,fontWeight:1000,color:"#c2410c"}}>UKUPNO TREBOVANO</div>
+                      <div style={{fontSize:24,fontWeight:1000}}>-{qtyLabel(articleHistory.events.filter(e=>e.kind==="TREBOVANJE").reduce((a,e)=>a+Number(e.qty||0),0))}</div>
+                    </div>
+                    <div style={{padding:14,borderRadius:14,background:"#eef2ff"}}>
+                      <div style={{fontSize:11,fontWeight:1000,color:"#3730a3"}}>POSLEDNJI POPIS</div>
+                      <div style={{fontSize:24,fontWeight:1000}}>
+                        {(() => { const p = articleHistory.events.find(e=>e.kind==="POPIS"); return p ? qtyLabel(Number(p.qty||0)) : "—"; })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="tableWrap" style={{marginTop:18}}>
+                    <table className="table">
+                      <thead><tr><th>Datum</th><th>Vrsta</th><th>Detalj</th><th>Status</th><th className="right">Količina</th></tr></thead>
+                      <tbody>
+                        {articleHistory.events
+                          .filter((e) => historyFilter === "SVE" || e.kind === historyFilter || (historyFilter === "TREBOVANJE" && e.kind === "PRENOS"))
+                          .map((e, i) => (
+                            <tr key={`${e.kind}-${e.created_at}-${i}`}>
+                              <td>{new Date(e.created_at).toLocaleString("sr-RS")}</td>
+                              <td><b>{e.kind === "ULAZ" ? "ULAZ" : e.kind === "POPIS" ? "POPIS" : "IZLAZ"}</b></td>
+                              <td>{e.detail}</td>
+                              <td>{e.status}</td>
+                              <td className="right" style={{fontWeight:1000,color:e.kind==="ULAZ" ? "#16803a" : e.kind==="POPIS" ? "#1c2f82" : "#c2410c"}}>
+                                {e.kind === "POPIS" ? qtyLabel(Number(e.qty||0)) : `${e.kind === "ULAZ" ? "+" : "-"}${qtyLabel(Number(e.qty||0))}`} {historyArticle.jm}
+                              </td>
+                            </tr>
+                          ))}
+                        {articleHistory.events.filter((e) => historyFilter === "SVE" || e.kind === historyFilter || (historyFilter === "TREBOVANJE" && e.kind === "PRENOS")).length === 0 && (
+                          <tr><td colSpan={5} className="muted">Nema zapisa za izabrani filter.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </section>
           </div>
         )}
 
@@ -2207,7 +2398,16 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                         </div>
                       </td>
                       <td>{s.sifra}</td>
-                      <td>{s.naziv}</td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => openArticleHistory(s)}
+                          style={{border:0,background:"transparent",padding:0,color:"#1c2f82",fontWeight:1000,cursor:"pointer",textAlign:"left",textDecoration:"underline"}}
+                          title="Otvori kompletnu istoriju artikla"
+                        >
+                          {s.naziv}
+                        </button>
+                      </td>
                       <td style={{ minWidth: 190 }}>
                         {s.barkod ? (
                           <div style={{ border: "1px solid #bbf7d0", background: "#f0fdf4", color: "#166534", borderRadius: 8, padding: "11px 9px", fontWeight: 1000 }}>
@@ -2252,40 +2452,58 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
           <section className="banner screenOnly">
             <div className="row">
               <div className="grow">
-                <h2>Trebovanja prodavnica</h2>
-                <p className="muted">Neotvorena trebovanja: <b style={{color:"#ef7d00"}}>{unopenedRequests.length}</b></p>
+                <h2>Trebovanja za knjiženje</h2>
+                <p className="muted">Admin dobija trebovanje tek kada magacioner završi kontrolu i potvrdi da je roba spakovana.</p>
               </div>
               <div style={{
                 minWidth: 92, minHeight: 72, borderRadius: 18, background:"#fff3e5",
                 color:"#a34d00", display:"grid", placeItems:"center", fontWeight:1000, fontSize:28
               }}>
-                {unopenedRequests.length}
+                {readyForAdmin.length}
               </div>
             </div>
 
             <div className="cardList" style={{marginTop:14}}>
-              {requests.length === 0 && <p className="muted">Nema trebovanja.</p>}
-              {requests.map((r) => (
+              {readyForAdmin.length === 0 && <p className="muted">Nema novih spakovanih trebovanja za knjiženje.</p>}
+              {readyForAdmin.map((r) => (
                 <button
                   key={r.id}
                   onClick={() => openAdminRequest(r)}
                   style={{
-                    width:"100%", border:r.status==="NOVO" ? "3px solid #ef7d00" : "1px solid #dfe5ee",
-                    background:r.status==="NOVO" ? "#fffaf4" : "white", borderRadius:18, padding:18,
+                    width:"100%", border:"3px solid #ef7d00",
+                    background:"#fffaf4", borderRadius:18, padding:18,
                     textAlign:"left", cursor:"pointer", color:"inherit"
                   }}
                 >
-                  <div style={{fontSize:12,fontWeight:1000,color:r.status==="NOVO" ? "#ef7d00" : "#1c2f82"}}>
-                    {r.status==="NOVO" ? "NEOTVORENO TREBOVANJE" : r.status}
-                  </div>
+                  <div style={{fontSize:12,fontWeight:1000,color:"#ef7d00"}}>🔔 SPAKOVANO · ČEKA KNJIŽENJE</div>
                   <div style={{fontSize:24,fontWeight:1000,color:"#1c2f82"}}>{r.location_name}</div>
                   <div style={{marginTop:5,color:"#6b7280"}}>
                     {r.requested_by} · {new Date(r.created_at).toLocaleString("sr-RS")} · {(r.lines||[]).length} stavki
                   </div>
-                  <div style={{marginTop:10,fontWeight:900,color:"#1c2f82"}}>OTVORI →</div>
+                  <div style={{marginTop:10,fontWeight:900,color:"#1c2f82"}}>OTVORI ZA KNJIŽENJE →</div>
                 </button>
               ))}
             </div>
+
+            {bookedRequests.length > 0 && (
+              <div style={{marginTop:24}}>
+                <h3 style={{color:"#1c2f82"}}>Proknjižena trebovanja</h3>
+                <div className="cardList" style={{marginTop:10}}>
+                  {bookedRequests.slice(0, 20).map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => openAdminRequest(r)}
+                      style={{
+                        width:"100%", border:"1px solid #dfe5ee", background:"white",
+                        borderRadius:14, padding:14, textAlign:"left", cursor:"pointer", color:"inherit"
+                      }}
+                    >
+                      <b>{r.location_name}</b> · {new Date(r.created_at).toLocaleString("sr-RS")} · PROKNJIŽENO
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 
@@ -2300,8 +2518,13 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                   <div className="muted">{new Date(adminReq.created_at).toLocaleString("sr-RS")} · Status: <b>{adminReq.status}</b></div>
                 </div>
                 <button className="btn btnGhost" onClick={() => setAdminReq(null)}>← NAZAD</button>
+                {adminReq.status === "POSLATO" && (
+                  <button className="btn" style={{background:"#16803a",color:"white"}} onClick={() => bookAdminRequest(false)}>
+                    ✓ PROKNJIŽI
+                  </button>
+                )}
                 <button className="btn" style={{background:"#ef7d00",color:"white"}} onClick={printAdminRequest}>
-                  🖨 PRIHVATI / SAČUVAJ PDF
+                  🖨 {adminReq.status === "POSLATO" ? "PROKNJIŽI / SAČUVAJ PDF" : "SAČUVAJ PDF"}
                 </button>
               </div>
 

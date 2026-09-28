@@ -8,16 +8,80 @@ export async function POST(req: Request) {
     const session = await requireSession();
 
     if (b.action === "status") {
+      const targetStatus = String(b.status || "").toUpperCase();
+
+      if (session.role === "MAGACIONER" && !["U PRIPREMI", "POSLATO"].includes(targetStatus)) {
+        return NextResponse.json({ ok: false, message: "Magacioner ne može da postavi taj status." }, { status: 403 });
+      }
+      if (session.role === "ADMIN" && targetStatus !== "PRIMLJENO") {
+        return NextResponse.json({ ok: false, message: "Admin može samo da proknjiži trebovanje." }, { status: 403 });
+      }
       if (session.role !== "ADMIN" && session.role !== "MAGACIONER") {
         return NextResponse.json({ ok: false, message: "Nedozvoljen pristup." }, { status: 403 });
       }
+
       const { data, error } = await admin.rpc("cm_set_request_status", {
         p_request_id: b.request_id,
-        p_status: b.status,
+        p_status: targetStatus,
         p_user_id: session.id,
       });
       if (error) throw error;
-      return NextResponse.json({ ok: true, data });
+      return NextResponse.json({ ok: true, data, status: targetStatus });
+    }
+
+    if (b.action === "pack") {
+      if (session.role !== "MAGACIONER") {
+        return NextResponse.json({ ok: false, message: "Samo magacioner može da potvrdi pakovanje." }, { status: 403 });
+      }
+
+      const requestId = String(b.request_id || "");
+      const packedLines = Array.isArray(b.lines)
+        ? b.lines
+            .map((x: any) => ({ article_id: String(x.article_id || ""), qty: Number(x.qty || 0) }))
+            .filter((x: any) => x.article_id && Number.isFinite(x.qty) && x.qty >= 0)
+        : [];
+
+      if (!requestId || !packedLines.length) {
+        return NextResponse.json({ ok: false, message: "Nedostaje trebovanje ili spakovane stavke." }, { status: 400 });
+      }
+
+      const { data: doc, error: docErr } = await admin
+        .from("cm_documents")
+        .select("id,status,type")
+        .eq("id", requestId)
+        .eq("type", "TREBOVANJE")
+        .single();
+      if (docErr) throw docErr;
+      if (["POSLATO", "PRIMLJENO"].includes(String(doc.status || "").toUpperCase())) {
+        return NextResponse.json({ ok: false, message: "Trebovanje je već potvrđeno." }, { status: 400 });
+      }
+
+      for (const line of packedLines) {
+        const { error: lineErr } = await admin
+          .from("cm_document_lines")
+          .update({ qty: line.qty })
+          .eq("document_id", requestId)
+          .eq("article_id", line.article_id);
+        if (lineErr) throw lineErr;
+      }
+
+      const { error: statusErr } = await admin
+        .from("cm_documents")
+        .update({ status: "POSLATO", updated_at: new Date().toISOString(), created_by: session.id })
+        .eq("id", requestId)
+        .eq("type", "TREBOVANJE");
+      if (statusErr) throw statusErr;
+
+      const { data: central, error: centralErr } = await admin
+        .from("cm_locations")
+        .select("id")
+        .eq("type", "CENTRAL")
+        .limit(1)
+        .single();
+      if (centralErr || !central?.id) throw centralErr || new Error("Centralni magacin nije pronađen.");
+      await reconcileCentralStock(admin, String(central.id));
+
+      return NextResponse.json({ ok: true, status: "POSLATO" });
     }
 
     if (session.role !== "PRODAVNICA") {

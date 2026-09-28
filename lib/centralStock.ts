@@ -1,3 +1,5 @@
+const REQUEST_LEDGER_START = Date.parse("2026-09-25T09:24:08.834Z");
+
 export type StockLedger = {
   inboundMap: Map<string, number>;
   outboundMap: Map<string, number>;
@@ -44,7 +46,7 @@ export async function reconcileCentralStock(admin: any, centralId: string): Prom
     // ČIM PRODAVNICA UNESE TREBOVANJE, količina se odmah skida/rezerviše iz centralnog stanja.
     // Status magacionera više ne utiče na računicu.
     // Samo stvarno otkazano/stornirano/odbijeno trebovanje se ne računa.
-    if (type === "TREBOVANJE") {
+    if (type === "TREBOVANJE" && new Date(d?.created_at || 0).getTime() >= REQUEST_LEDGER_START) {
       const excludedStatuses = new Set([
         "OTKAZANO",
         "STORNIRANO",

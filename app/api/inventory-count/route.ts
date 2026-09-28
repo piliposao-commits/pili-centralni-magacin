@@ -34,6 +34,16 @@ export async function POST(req: Request) {
       .upsert(rows, { onConflict: "location_id,article_id" });
     if (error) throw error;
 
+    const historyRows = rows.map((x: any) => ({
+      article_id: x.article_id,
+      qty: x.qty,
+      counted_by: session.full_name,
+      counted_by_user_id: session.id,
+      created_at: new Date().toISOString(),
+    }));
+    const { error: historyErr } = await admin.from("cm_inventory_history").insert(historyRows);
+    if (historyErr) throw historyErr;
+
     return NextResponse.json({ ok: true, updated: rows.length });
   } catch (e: any) {
     return NextResponse.json({ ok: false, message: e?.message || "Greška" }, { status: 400 });
