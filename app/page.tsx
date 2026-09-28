@@ -304,7 +304,6 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [articleHistory, setArticleHistory] = useState<ArticleHistory | null>(null);
   const [historyBusy, setHistoryBusy] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("SVE");
-  const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState("default");
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
   const imageMigrationRunningRef = useRef(false);
@@ -375,23 +374,28 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     } catch {}
   }
 
-  async function enableRequestAlerts() {
-    if (!("Notification" in window)) {
-      setMsg("Ovaj pregledač ne podržava sistemske notifikacije.");
-      return;
-    }
-    const permission = await Notification.requestPermission();
-    setNotificationPermission(permission);
-    if (permission === "granted") {
-      localStorage.setItem("cm_request_alerts", "1");
-      setAlertsEnabled(true);
-      playRequestSound();
-      setMsg(user?.role === "ADMIN" ? "✓ Admin notifikacije za knjiženje su uključene." : "✓ Notifikacije i zvuk za nova trebovanja su uključeni.");
-    } else {
-      localStorage.removeItem("cm_request_alerts");
-      setAlertsEnabled(false);
-      setMsg("Notifikacije nisu dozvoljene u pregledaču.");
-    }
+  async function primeAutomaticAlerts() {
+    try {
+      const audio = alertAudioRef.current;
+      if (audio) {
+        const oldVolume = audio.volume;
+        audio.volume = 0;
+        await audio.play().catch(() => {});
+        audio.pause();
+        audio.currentTime = 0;
+        audio.volume = oldVolume || 1;
+      }
+    } catch {}
+
+    if (!("Notification" in window)) return;
+    try {
+      if (Notification.permission === "default") {
+        const permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+      } else {
+        setNotificationPermission(Notification.permission);
+      }
+    } catch {}
   }
 
   async function load() {
@@ -421,10 +425,17 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
       if (saved) setImages(JSON.parse(saved));
       alertAudioRef.current = new Audio("/notification.wav");
       alertAudioRef.current.preload = "auto";
-      if ("Notification" in window) {
-        setNotificationPermission(Notification.permission);
-        setAlertsEnabled(Notification.permission === "granted" && localStorage.getItem("cm_request_alerts") === "1");
-      }
+      if ("Notification" in window) setNotificationPermission(Notification.permission);
+
+      // Bez dodatnog dugmeta na ekranu: prvi dodir/klik korisnika automatski
+      // priprema zvuk i, ako treba, traži browser dozvolu za sistemske notifikacije.
+      const activate = () => { void primeAutomaticAlerts(); };
+      window.addEventListener("pointerdown", activate, { once: true });
+      window.addEventListener("keydown", activate, { once: true });
+      return () => {
+        window.removeEventListener("pointerdown", activate);
+        window.removeEventListener("keydown", activate);
+      };
     } catch {}
   }, []);
 
@@ -523,6 +534,12 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     if (user.role === "ADMIN" && tab === "menu") setTab("ulaz");
   }, [user, tab]);
 
+  useEffect(() => {
+    if (!user || user.role !== "MAGACIONER" || tab !== "menu") return;
+    const imaAktivnih = requests.some((r) => r.status === "NOVO" || r.status === "U PRIPREMI");
+    if (imaAktivnih) setTab("trebovanja");
+  }, [user?.id, requests.length]);
+
   function saveImages(next: Record<string, string>) {
     setImages(next);
     try {
@@ -532,6 +549,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
 
   async function doLogin() {
     setMsg("");
+    void primeAutomaticAlerts();
     const r = await fetch("/api/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -1100,51 +1118,25 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
       <div className="wrap">
         <section
           className="banner hero"
-          style={{ background: "linear-gradient(135deg,#1c2f82,#3147ab)" }}
+          style={{
+            background: "linear-gradient(135deg,#1c2f82,#3147ab)",
+            padding: user.role === "MAGACIONER" ? 16 : undefined,
+            marginBottom: user.role === "MAGACIONER" ? 10 : undefined,
+          }}
         >
-          <div className="big">Centralni magacin</div>
+          <div className="big">{user.role === "MAGACIONER" ? "MAGACIONER" : "Centralni magacin"}</div>
           <div>
             {user.role === "ADMIN"
               ? `Vrednost robe: ${money(total)}`
-              : tab === "menu" ? "Izaberi operaciju" : "Touchscreen rad magacionera"}
+              : tab === "trebovanja"
+                ? `Aktivna trebovanja: ${workRequests.length}`
+                : tab === "izlaz"
+                  ? "Direktan izlaz robe"
+                  : "Izaberi: TREBOVANJA ili IZLAZ ROBE"}
           </div>
         </section>
 
-        {(user.role === "MAGACIONER" || user.role === "ADMIN") && (
-          <section
-            className="banner"
-            style={{
-              marginBottom: 14,
-              border: alertsEnabled ? "2px solid #15915f" : "2px solid #ef7d00",
-              background: alertsEnabled ? "#effbf5" : "#fff7ed",
-            }}
-          >
-            <div className="row">
-              <div className="grow">
-                <div style={{ fontWeight: 1000, fontSize: 18 }}>
-                  🔔 {user.role === "MAGACIONER" ? "Obaveštenja za nova trebovanja" : "Obaveštenja za knjiženje"}
-                </div>
-                <div className="muted">
-                  {alertsEnabled && notificationPermission === "granted"
-                    ? user.role === "MAGACIONER"
-                      ? "UKLJUČENA — novo trebovanje iz radnje aktivira zvuk i sistemsku notifikaciju."
-                      : "UKLJUČENA — kada magacioner potvrdi pakovanje, admin dobija zvuk i sistemsku notifikaciju."
-                    : user.role === "MAGACIONER"
-                      ? "Uključi jednom na ovom uređaju magacionera."
-                      : "Uključi jednom na admin uređaju."}
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn"
-                onClick={enableRequestAlerts}
-                style={{ background: alertsEnabled ? "#15915f" : "#ef7d00", color: "white", minHeight: 48 }}
-              >
-                {alertsEnabled ? "✓ UKLJUČENO" : "UKLJUČI NOTIFIKACIJE"}
-              </button>
-            </div>
-          </section>
-        )}
+
 
         {user.role === "ADMIN" && (
           <div className="tabs">
@@ -1193,7 +1185,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
               >
                 <div style={{ fontSize: 72, lineHeight: 1 }}>📦</div>
                 <div style={{ fontSize: 32, fontWeight: 1000, marginTop: 18 }}>IZLAZ ROBE</div>
-                <div style={{ fontSize: 17, opacity: .88, marginTop: 8 }}>Izaberi prodavnicu i dodaj robu dodirom</div>
+                <div style={{ fontSize: 17, opacity: .88, marginTop: 8 }}>Direktan izlaz robe bez trebovanja</div>
               </button>
 
               <button
@@ -1218,7 +1210,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                 )}
                 <div style={{ fontSize: 72, lineHeight: 1 }}>🧾</div>
                 <div style={{ fontSize: 32, fontWeight: 1000, marginTop: 18 }}>TREBOVANJA</div>
-                <div style={{ fontSize: 17, opacity: .92, marginTop: 8 }}>Nova trebovanja prodavnica i kontrola stavki</div>
+                <div style={{ fontSize: 17, opacity: .92, marginTop: 8 }}>Otvori nova trebovanja, čekiraj i spakuj</div>
               </button>
             </div>
           </section>

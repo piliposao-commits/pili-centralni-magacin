@@ -73,14 +73,21 @@ export async function GET() {
       return s.role === "ADMIN" ? row : { ...row, maloprodajna_cena: undefined, vrednost: undefined };
     });
 
-    const safeInbounds = (inbounds || []).map((d: any) => ({
-      id: d.id,
-      document_no: d.document_no || null,
-      supplier: d.supplier || null,
-      status: d.status,
-      created_at: d.created_at,
-      lines: Array.isArray(d.cm_document_lines) ? d.cm_document_lines : [],
-    }));
+    // U admin sekciji "Prethodni ulazi" prikazujemo samo stvarne ulaze sa kalkulacija.
+    // Sakrivamo sistemsko početno stanje, clean-start i eventualne REPAIR/REPAR servisne dokumente.
+    const safeInbounds = (inbounds || [])
+      .filter((d: any) => {
+        const marker = `${d?.document_no || ""} ${d?.supplier || ""}`.toUpperCase();
+        return !["POCETNO", "SISTEM", "CLEAN-START", "REPAIR", "REPAR"].some((x) => marker.includes(x));
+      })
+      .map((d: any) => ({
+        id: d.id,
+        document_no: d.document_no || null,
+        supplier: d.supplier || null,
+        status: d.status,
+        created_at: d.created_at,
+        lines: Array.isArray(d.cm_document_lines) ? d.cm_document_lines : [],
+      }));
 
     return NextResponse.json({ ok: true, user: s, locations, stock: safeStock, requests: reqs || [], inbounds: safeInbounds });
   } catch (e: any) {
