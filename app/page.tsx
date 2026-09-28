@@ -1210,7 +1210,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
             >
               Stanje / vrednost
             </a>
-            <button className={`btn ${tab === "trebovanja" ? "active" : "btnGhost"}`} onClick={() => setTab("trebovanja")}>Trebovanja {user.role === "ADMIN" && readyForAdmin.length > 0 ? `(${readyForAdmin.length} za knjiženje)` : user.role === "MAGACIONER" && unopenedRequests.length > 0 ? `(${unopenedRequests.length} novih)` : ""}</button>
+            <button className={`btn ${tab === "trebovanja" ? "active" : "btnGhost"}`} onClick={() => setTab("trebovanja")}>Trebovanja {readyForAdmin.length > 0 ? `(${readyForAdmin.length} za knjiženje)` : ""}</button>
             </div>
           </>
         )}
