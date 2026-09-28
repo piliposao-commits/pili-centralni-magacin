@@ -1060,6 +1060,18 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
 
   return (
     <main className="page">
+      <div style={{
+        margin:"10px auto 14px",
+        maxWidth:1180,
+        padding:"10px 14px",
+        borderRadius:12,
+        background:"#fff3cd",
+        color:"#7a5200",
+        fontWeight:1000,
+        border:"2px solid #f2c94c"
+      }}>
+        VERZIJA 28.09 ISTORIJA ARTIKLA
+      </div>
       <header className="top" style={{ background: "#1c2f82" }}>
         <div>
           <strong>PILI — CENTRALNI MAGACIN</strong>
@@ -2349,7 +2361,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
             <div className="tableWrap">
               <table className="table">
                 <thead>
-                  <tr><th>Slika</th><th>Šifra</th><th>Naziv</th><th>Barkod</th><th className="right">Stanje</th><th className="right">Malopr. cena</th><th className="right">Vrednost</th></tr>
+                  <tr><th>Slika</th><th>Šifra</th><th>Naziv</th><th>Istorija</th><th>Barkod</th><th className="right">Stanje</th><th className="right">Malopr. cena</th><th className="right">Vrednost</th></tr>
                 </thead>
                 <tbody>
                   {stock.map((s) => (
@@ -2402,10 +2414,39 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                         <button
                           type="button"
                           onClick={() => openArticleHistory(s)}
-                          style={{border:0,background:"transparent",padding:0,color:"#1c2f82",fontWeight:1000,cursor:"pointer",textAlign:"left",textDecoration:"underline"}}
+                          style={{
+                            border:0,
+                            background:"transparent",
+                            padding:0,
+                            color:"#1c2f82",
+                            fontWeight:1000,
+                            cursor:"pointer",
+                            textAlign:"left",
+                            textDecoration:"underline"
+                          }}
                           title="Otvori kompletnu istoriju artikla"
                         >
                           {s.naziv}
+                        </button>
+                      </td>
+                      <td style={{ minWidth: 170 }}>
+                        <button
+                          type="button"
+                          onClick={() => openArticleHistory(s)}
+                          style={{
+                            width:"100%",
+                            minHeight:44,
+                            border:0,
+                            borderRadius:10,
+                            background:"#1c2f82",
+                            color:"#fff",
+                            fontWeight:1000,
+                            fontSize:12,
+                            cursor:"pointer",
+                            padding:"8px 10px"
+                          }}
+                        >
+                          📋 OTVORI ISTORIJU
                         </button>
                       </td>
                       <td style={{ minWidth: 190 }}>
@@ -2442,7 +2483,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                     </tr>
                   ))}
                 </tbody>
-                <tfoot><tr><td colSpan={6}><b>UKUPNA VREDNOST</b></td><td className="right"><b>{money(total)}</b></td></tr></tfoot>
+                <tfoot><tr><td colSpan={7}><b>UKUPNA VREDNOST</b></td><td className="right"><b>{money(total)}</b></td></tr></tfoot>
               </table>
             </div>
           </section>

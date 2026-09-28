@@ -1,0 +1,6 @@
+MORA DA SE VIDI:
+- žuta traka: VERZIJA 28.09 ISTORIJA ARTIKLA
+- u Stanje / vrednost kolona ISTORIJA
+- plavo dugme OTVORI ISTORIJU za svaki artikal
+
+Ako to ne vidiš, deployovan je stari folder/commit.
