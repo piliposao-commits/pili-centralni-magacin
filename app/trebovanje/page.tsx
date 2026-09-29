@@ -30,26 +30,24 @@ const n = (v: number) =>
 function splitArticleTitle(naziv: string) {
   const clean = (naziv || "").trim();
   const tokens = clean.split(/\s+/).filter(Boolean);
-  if (tokens.length <= 2) {
-    return { main: clean, sub: "" };
-  }
+  if (tokens.length <= 2) return { main: clean, sub: "" };
 
   const accentWords = [
-    "limun", "narandža", "narandža", "pomorandža", "jagoda", "breskva", "višnja", "visnja",
-    "jabuka", "grejp", "kruška", "kruška", "malina", "zova", "menta", "cola", "classic",
-    "zero", "light", "tonic", "bitter", "orange", "apple", "peach", "lemon"
+    "limun", "narandža", "narandza", "zuta", "žuta", "crvena", "light", "zero", "classic",
+    "jabuka", "breskva", "jagoda", "visnja", "višnja", "tonic", "bitter", "lemon", "orange"
   ];
-  const lower = tokens.map((x) => x.toLowerCase());
-  const accentIndex = lower.findIndex((x) => accentWords.includes(x));
-  const sizeIndex = lower.findIndex((x) => /\d/.test(x));
+  const lower = tokens.map(t => t.toLowerCase());
+  const accentIndex = lower.findIndex(x => accentWords.includes(x));
+  const sizeIndex = lower.findIndex(x => /\d/.test(x));
 
   let cut = 2;
   if (sizeIndex >= 1) cut = Math.max(cut, sizeIndex + 1);
   if (accentIndex > cut) cut = accentIndex;
 
-  const main = tokens.slice(0, Math.min(cut, tokens.length)).join(" ");
-  const sub = tokens.slice(Math.min(cut, tokens.length)).join(" ");
-  return { main, sub };
+  return {
+    main: tokens.slice(0, Math.min(cut, tokens.length)).join(" "),
+    sub: tokens.slice(Math.min(cut, tokens.length)).join(" ")
+  };
 }
 
 export default function TrebovanjePage() {
@@ -481,25 +479,24 @@ export default function TrebovanjePage() {
                   </div>
 
                   <div className="trebStock">
-                    <span className="trebStockLabel">Stanje</span>
+                    <span className="trebStockLabel">STANJE</span>
                     <span className="trebStockValue">{n(x.stanje)} {x.jm}</span>
                   </div>
 
-                  <button
-                    type="button"
-                    className="trebQtyButton"
-                    onClick={() => {
-                      const value = window.prompt(
-                        `${x.naziv}\nUnesi količinu:`,
-                        requested ? String(requested) : ""
-                      );
-                      if (value === null) return;
-                      const parsed = Math.max(0, Math.floor(Number(value.replace(",", ".")) || 0));
-                      setQty({ ...qty, [x.article_id]: parsed });
-                    }}
-                  >
-                    {requested > 0 ? `${requested} kom` : "npr. 30 kom"}
-                  </button>
+                  <div className="field trebQtyField" style={{ marginBottom: 0 }}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputMode="numeric"
+                      placeholder="npr. 30 kom"
+                      value={requested || ""}
+                      onChange={(e) =>
+                        setQty({ ...qty, [x.article_id]: Math.max(0, Math.floor(Number((e.target.value || "0").replace(",", ".")) || 0)) })
+                      }
+                      className="trebQtyInput"
+                    />
+                  </div>
                 </div>
               );
             })}
