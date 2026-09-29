@@ -1,9 +1,9 @@
-MAGACIONER — SAMO TRAŽENO / SPAKOVANO
+MAGACIONER — KOLICINA
 
-- U kartici se više NE prikazuje stanje.
-- Ako nije menjano, vidi se samo: TRAŽENO.
-- Ako magacioner ispravi količinu:
-  - stara tražena količina je precrtana,
-  - ispod nje piše nova količina kao SPAKOVANO.
-- Čekiranje i zelenjenje kartice ostaju isto.
-- Nema SQL koraka.
+- Prikazuje se samo TRAŽENO.
+- STANJE i SPAKUJ su uklonjeni sa kartice.
+- Ako magacioner ispravi količinu olovkom:
+  - originalna tražena količina ostaje precrtana,
+  - pored nje se prikazuje nova, stvarno spakovana količina.
+- Zelena kartica za čekirane/spakovane artikle ostaje.
+- Ne treba SQL.
