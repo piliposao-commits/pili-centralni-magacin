@@ -148,3 +148,191 @@
     padding:8px 6px !important;
   }
 }
+
+
+/* ===== MAGACIONER PAKOVANJE — TREBOVANJE STIL ===== */
+.magPackGrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:10px;
+  margin-top:12px;
+}
+.magPackCard{
+  border:2px solid #dce2ec;
+  border-radius:16px;
+  padding:9px;
+  background:#fff;
+  transition:background .16s ease,border-color .16s ease,box-shadow .16s ease,transform .1s ease;
+  box-shadow:0 5px 16px rgba(0,0,0,.04);
+}
+.magPackCardDone{
+  background:#dff7e9 !important;
+  border-color:#15915f !important;
+  box-shadow:0 0 0 2px rgba(21,145,95,.08),0 6px 18px rgba(21,145,95,.12) !important;
+}
+.magPackHead{
+  margin-bottom:6px;
+}
+.magPackName{
+  font-size:15px;
+  line-height:1.08;
+  font-weight:1000;
+  color:#1c2f82;
+}
+.magPackCardDone .magPackName{
+  color:#0f6b43;
+}
+.magPackCode{
+  margin-top:2px;
+  font-size:10px;
+  font-weight:800;
+  color:#6b7280;
+}
+.magPackBody{
+  display:grid;
+  grid-template-columns:118px minmax(0,1fr);
+  gap:9px;
+  align-items:center;
+}
+.magPackImageBox{
+  width:118px;
+  height:118px;
+  border-radius:12px;
+  background:#f5f7fb;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  padding:4px;
+}
+.magPackCardDone .magPackImageBox{
+  background:#f4fff8;
+}
+.magPackImage{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  object-position:center;
+  transform:scale(1.08);
+  transform-origin:center;
+}
+.magPackPlaceholder{
+  font-size:42px;
+}
+.magPackInfo{
+  display:grid;
+  gap:5px;
+}
+.magPackLine{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:7px 8px;
+  border-radius:9px;
+  background:#eef3ff;
+  color:#1c2f82;
+  font-size:12px;
+}
+.magPackCardDone .magPackLine{
+  background:#c9efda;
+  color:#0f6b43;
+}
+.magPackLine span{
+  font-size:10px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+.magPackLine b{
+  font-size:14px;
+  font-weight:1000;
+  white-space:nowrap;
+}
+.magPackWarn{
+  background:#fff7ed;
+  color:#b45309;
+}
+.magPackActions{
+  display:grid;
+  grid-template-columns:1fr 44px;
+  gap:7px;
+  margin-top:8px;
+}
+.magPackCheck,
+.magPackEdit{
+  border:0;
+  border-radius:10px;
+  min-height:42px;
+  font-weight:1000;
+  cursor:pointer;
+}
+.magPackCheck{
+  background:#eef2ff;
+  color:#1c2f82;
+}
+.magPackCheckDone{
+  background:#15915f !important;
+  color:#fff !important;
+}
+.magPackCheckDisabled{
+  background:#fee2e2 !important;
+  color:#991b1b !important;
+  cursor:not-allowed !important;
+}
+.magPackEdit{
+  background:#fff3e5;
+  font-size:20px;
+}
+
+@media(max-width:640px){
+  .magPackGrid{
+    grid-template-columns:1fr;
+    gap:7px;
+  }
+  .magPackCard{
+    padding:7px;
+    border-radius:13px;
+  }
+  .magPackHead{
+    margin-bottom:4px;
+  }
+  .magPackName{
+    font-size:13px;
+  }
+  .magPackCode{
+    font-size:9px;
+  }
+  .magPackBody{
+    grid-template-columns:96px minmax(0,1fr);
+    gap:7px;
+  }
+  .magPackImageBox{
+    width:96px;
+    height:96px;
+    border-radius:10px;
+    padding:3px;
+  }
+  .magPackImage{
+    transform:scale(1.12);
+  }
+  .magPackInfo{
+    gap:4px;
+  }
+  .magPackLine{
+    padding:5px 6px;
+    border-radius:8px;
+  }
+  .magPackLine span{
+    font-size:8px;
+  }
+  .magPackLine b{
+    font-size:12px;
+  }
+  .magPackActions{
+    margin-top:6px;
+  }
+  .magPackCheck,
+  .magPackEdit{
+    min-height:38px;
+  }
+}

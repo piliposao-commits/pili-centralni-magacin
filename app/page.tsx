@@ -1560,91 +1560,64 @@ async function saveImageAdjust() {
             </section>
 
             <section className="banner">
-              <h2>Kontrola stavki</h2>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill,minmax(250px,1fr))",
-                  gap: 12,
-                  marginTop: 14,
-                }}
-              >
+              <h2 style={{marginBottom:4}}>Pakovanje robe</h2>
+              <p className="muted" style={{marginTop:0}}>
+                Čekiraj artikal kada je spakovan. Cela kartica će pozeleneti da se jasno vidi dokle si stigao.
+              </p>
+              <div className="magPackGrid">
                 {prepared.map((l) => {
                   const enough = l.stock >= l.sendQty && l.sendQty > 0;
                   return (
                     <div
                       key={l.article_id}
-                      style={{
-                        border: l.checked ? "3px solid #15915f" : "2px solid #dce2ec",
-                        borderRadius: 18,
-                        padding: 12,
-                        background: l.checked ? "#effbf5" : "white",
-                      }}
+                      className={`magPackCard ${l.checked ? "magPackCardDone" : ""}`}
                     >
-                      <div
-                        style={{
-                          height: 115,
-                          borderRadius: 14,
-                          background: "#f5f7fb",
-                          display: "grid",
-                          placeItems: "center",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {images[articleImageKey(l)] ? (
-                          <img
-                            src={images[articleImageKey(l)]}
-                            alt={l.naziv}
-                            style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                          />
-                        ) : (
-                          <div style={{ fontSize: 46 }}>📦</div>
-                        )}
+                      <div className="magPackHead">
+                        <div className="magPackName">{l.naziv}</div>
+                        <div className="magPackCode">Šifra {l.sifra}</div>
                       </div>
 
-                      <div style={{ fontWeight: 1000, fontSize: 18, marginTop: 10 }}>{l.naziv}</div>
-                      <div style={{ color: "#6b7280", fontSize: 13 }}>Šifra {l.sifra}</div>
+                      <div className="magPackBody">
+                        <div className="magPackImageBox">
+                          {images[articleImageKey(l)] ? (
+                            <img
+                              src={images[articleImageKey(l)]}
+                              alt={l.naziv}
+                              className="magPackImage"
+                            />
+                          ) : (
+                            <div className="magPackPlaceholder">📦</div>
+                          )}
+                        </div>
 
-                      <div style={{ marginTop: 10, display: "grid", gap: 5 }}>
-                        <div>
-                          Traženo: <b>{qtyLabel(Number(l.qty))} {l.jm}</b>
-                        </div>
-                        <div>
-                          Na stanju: <b>{qtyLabel(l.stock)} {l.jm}</b>
-                        </div>
-                        <div style={{ color: l.sendQty < Number(l.qty) ? "#b45309" : "#166534" }}>
-                          Šaljem: <b>{qtyLabel(l.sendQty)} {l.jm}</b>
+                        <div className="magPackInfo">
+                          <div className="magPackLine">
+                            <span>Traženo</span>
+                            <b>{qtyLabel(Number(l.qty))} {l.jm}</b>
+                          </div>
+                          <div className="magPackLine">
+                            <span>Stanje</span>
+                            <b>{qtyLabel(l.stock)} {l.jm}</b>
+                          </div>
+                          <div className={`magPackLine ${l.sendQty < Number(l.qty) ? "magPackWarn" : ""}`}>
+                            <span>Spakuj</span>
+                            <b>{qtyLabel(l.sendQty)} {l.jm}</b>
+                          </div>
                         </div>
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, marginTop: 12 }}>
+                      <div className="magPackActions">
                         <button
                           onClick={() => togglePrepared(l.article_id)}
                           disabled={!enough}
-                          style={{
-                            border: 0,
-                            borderRadius: 12,
-                            minHeight: 50,
-                            fontWeight: 1000,
-                            cursor: enough ? "pointer" : "not-allowed",
-                            background: l.checked ? "#15915f" : enough ? "#eef2ff" : "#fee2e2",
-                            color: l.checked ? "white" : enough ? "#1c2f82" : "#991b1b",
-                          }}
+                          className={`magPackCheck ${l.checked ? "magPackCheckDone" : ""} ${!enough ? "magPackCheckDisabled" : ""}`}
                         >
-                          {l.checked ? "✓ SPREMNO" : enough ? "☐ ČEKIRAJ" : "NEMA DOVOLJNO"}
+                          {l.checked ? "✓ SPAKOVANO" : enough ? "☐ ČEKIRAJ" : "NEMA DOVOLJNO"}
                         </button>
                         <button
                           onClick={() => openEdit(l)}
                           title="Ispravi količinu"
-                          style={{
-                            width: 52,
-                            minHeight: 50,
-                            border: 0,
-                            borderRadius: 12,
-                            background: "#fff3e5",
-                            fontSize: 24,
-                            cursor: "pointer",
-                          }}
+                          className="magPackEdit"
                         >
                           ✏️
                         </button>
@@ -1664,7 +1637,7 @@ async function saveImageAdjust() {
                   style={{ background: "#ef7d00", color: "white", minHeight: 54, fontSize: 17 }}
                   onClick={goToReview}
                 >
-                  KONTROLIŠI CEO SPISAK →
+                  PREGLEDAJ SPAKOVANO →
                 </button>
               </div>
             </section>
