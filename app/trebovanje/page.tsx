@@ -27,6 +27,31 @@ const articleImageKey = (x: { sifra?: string; barkod?: string | null; article_id
 const n = (v: number) =>
   Number(v || 0).toLocaleString("sr-RS", { maximumFractionDigits: 3 });
 
+function splitArticleTitle(naziv: string) {
+  const clean = (naziv || "").trim();
+  const tokens = clean.split(/\s+/).filter(Boolean);
+  if (tokens.length <= 2) {
+    return { main: clean, sub: "" };
+  }
+
+  const accentWords = [
+    "limun", "narandža", "narandža", "pomorandža", "jagoda", "breskva", "višnja", "visnja",
+    "jabuka", "grejp", "kruška", "kruška", "malina", "zova", "menta", "cola", "classic",
+    "zero", "light", "tonic", "bitter", "orange", "apple", "peach", "lemon"
+  ];
+  const lower = tokens.map((x) => x.toLowerCase());
+  const accentIndex = lower.findIndex((x) => accentWords.includes(x));
+  const sizeIndex = lower.findIndex((x) => /\d/.test(x));
+
+  let cut = 2;
+  if (sizeIndex >= 1) cut = Math.max(cut, sizeIndex + 1);
+  if (accentIndex > cut) cut = accentIndex;
+
+  const main = tokens.slice(0, Math.min(cut, tokens.length)).join(" ");
+  const sub = tokens.slice(Math.min(cut, tokens.length)).join(" ");
+  return { main, sub };
+}
+
 export default function TrebovanjePage() {
   const [user, setUser] = useState<User | null>(null);
   const [location, setLocation] = useState<Location | null>(null);
@@ -422,8 +447,18 @@ export default function TrebovanjePage() {
                     border: requested > 0 ? "3px solid #ef7d00" : "1px solid #dde3ed",
                   }}
                 >
-                  <div className="trebTitle">{x.naziv}</div>
-                  <div className="trebSifra">Šifra {x.sifra}</div>
+                  {(() => {
+                    const title = splitArticleTitle(x.naziv);
+                    return (
+                      <>
+                        <div className="trebTitle">
+                          <span className="trebTitleMain">{title.main}</span>
+                          {title.sub ? <span className="trebTitleSub">{title.sub}</span> : null}
+                        </div>
+                        <div className="trebSifra">Šifra {x.sifra}</div>
+                      </>
+                    );
+                  })()}
 
                   <div className="trebImageBox">
                     {(x.image_url || localImages[articleImageKey(x)]) ? (
@@ -463,7 +498,7 @@ export default function TrebovanjePage() {
                       setQty({ ...qty, [x.article_id]: parsed });
                     }}
                   >
-                    {requested > 0 ? `✓ KOLIČINA: ${requested}` : "＋ UNESI KOLIČINU"}
+                    {requested > 0 ? `${requested} kom` : "npr. 30 kom"}
                   </button>
                 </div>
               );
