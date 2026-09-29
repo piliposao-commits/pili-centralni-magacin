@@ -422,6 +422,9 @@ export default function TrebovanjePage() {
                     border: requested > 0 ? "3px solid #ef7d00" : "1px solid #dde3ed",
                   }}
                 >
+                  <div className="trebTitle">{x.naziv}</div>
+                  <div className="trebSifra">Šifra {x.sifra}</div>
+
                   <div className="trebImageBox">
                     {(x.image_url || localImages[articleImageKey(x)]) ? (
                       <img
@@ -437,42 +440,31 @@ export default function TrebovanjePage() {
                       <span>📦</span>
                     )}
                   </div>
-                  <div className="trebTitle">
-                    {x.naziv}
-                  </div>
+
                   <div className="trebCode">
-                    Šifra {x.sifra}<br />
-                    {x.barkod ? (
-                      <span style={{ display: "inline-block", marginTop: 3, fontWeight: 900, color: "#111827", letterSpacing: ".06em" }}>
-                        ▥ {x.barkod}
-                      </span>
-                    ) : (
-                      <span style={{ display: "inline-block", marginTop: 3 }}>Bez barkoda</span>
-                    )}
-                  </div>
-                  <div className="trebStock">
-                    <div className="trebStockLabel">NA STANJU</div>
-                    <div className="trebStockValue">
-                      {n(x.stanje)} {x.jm}
-                    </div>
+                    {x.barkod ? <>▥ {x.barkod}</> : <>Bez barkoda</>}
                   </div>
 
-                  <div className="field trebQtyField" style={{ marginBottom: 0 }}>
-                    <label>Trebujem</label>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min="0"
-                      step="1"
-                      placeholder="0"
-                      value={requested || ""}
-                      onFocus={(e) => e.currentTarget.select()}
-                      onChange={(e) =>
-                        setQty({ ...qty, [x.article_id]: Math.max(0, Math.floor(Number(e.target.value || 0))) })
-                      }
-                      style={{ fontSize: 22, fontWeight: 900, textAlign: "center" }}
-                    />
+                  <div className="trebStock">
+                    <span className="trebStockLabel">Stanje</span>
+                    <span className="trebStockValue">{n(x.stanje)} {x.jm}</span>
                   </div>
+
+                  <button
+                    type="button"
+                    className="trebQtyButton"
+                    onClick={() => {
+                      const value = window.prompt(
+                        `${x.naziv}\nUnesi količinu:`,
+                        requested ? String(requested) : ""
+                      );
+                      if (value === null) return;
+                      const parsed = Math.max(0, Math.floor(Number(value.replace(",", ".")) || 0));
+                      setQty({ ...qty, [x.article_id]: parsed });
+                    }}
+                  >
+                    {requested > 0 ? `✓ KOLIČINA: ${requested}` : "＋ UNESI KOLIČINU"}
+                  </button>
                 </div>
               );
             })}
@@ -502,7 +494,7 @@ export default function TrebovanjePage() {
               disabled={!selected.length}
               onClick={() => setReview(true)}
             >
-              KONTROLIŠI SPISAK →
+              PREGLEDAJ TREBOVANJE →
             </button>
           </div>
         </div>
