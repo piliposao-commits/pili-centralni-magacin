@@ -1,4 +1,5 @@
 const REQUEST_LEDGER_START = Date.parse("2026-09-25T09:24:08.834Z");
+const BOOKED_REQUEST_STATUSES = new Set(["POSLATO", "PRIMLJENO", "ZAVRSENO"]);
 
 export type StockLedger = {
   inboundMap: Map<string, number>;
@@ -49,7 +50,7 @@ export async function reconcileCentralStock(admin: any, centralId: string): Prom
     if (
       type === "TREBOVANJE" &&
       new Date(d?.created_at || 0).getTime() >= REQUEST_LEDGER_START &&
-      ["POSLATO", "PRIMLJENO", "ZAVRSENO"].includes(status)
+      BOOKED_REQUEST_STATUSES.has(status)
     ) {
       for (const line of lines) {
         const id = String(line?.article_id || "");

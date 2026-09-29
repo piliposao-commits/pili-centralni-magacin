@@ -95,6 +95,7 @@ type HistoryEvent = {
   delta: number | null;
   detail: string;
   status: string;
+  booked?: boolean;
 };
 
 type ArticleHistory = {
@@ -1905,7 +1906,7 @@ async function saveImageAdjust() {
                     </div>
                     <div style={{padding:14,borderRadius:14,background:"#fff7ed"}}>
                       <div style={{fontSize:11,fontWeight:1000,color:"#c2410c"}}>UKUPNO TREBOVANO</div>
-                      <div style={{fontSize:24,fontWeight:1000}}>-{qtyLabel(articleHistory.events.filter(e=>e.kind==="TREBOVANJE").reduce((a,e)=>a+Number(e.qty||0),0))}</div>
+                      <div style={{fontSize:24,fontWeight:1000}}>-{qtyLabel(articleHistory.events.filter(e=>e.kind==="TREBOVANJE" && e.booked !== false && ["POSLATO","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase())).reduce((a,e)=>a+Number(e.qty||0),0))}</div>
                     </div>
                     <div style={{padding:14,borderRadius:14,background:"#eef2ff"}}>
                       <div style={{fontSize:11,fontWeight:1000,color:"#3730a3"}}>POSLEDNJI POPIS</div>
@@ -1924,11 +1925,17 @@ async function saveImageAdjust() {
                           .map((e, i) => (
                             <tr key={`${e.kind}-${e.created_at}-${i}`}>
                               <td>{new Date(e.created_at).toLocaleString("sr-RS")}</td>
-                              <td><b>{e.kind === "ULAZ" ? "ULAZ" : e.kind === "POPIS" ? "POPIS" : "IZLAZ"}</b></td>
+                              <td><b>{e.kind === "ULAZ" ? "ULAZ" : e.kind === "POPIS" ? "POPIS" : (e.booked === false || !["POSLATO","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase())) ? "ČEKA PAKOVANJE" : "IZLAZ"}</b></td>
                               <td>{e.detail}</td>
                               <td>{e.status}</td>
-                              <td className="right" style={{fontWeight:1000,color:e.kind==="ULAZ" ? "#16803a" : e.kind==="POPIS" ? "#1c2f82" : "#c2410c"}}>
-                                {e.kind === "POPIS" ? qtyLabel(Number(e.qty||0)) : `${e.kind === "ULAZ" ? "+" : "-"}${qtyLabel(Number(e.qty||0))}`} {historyArticle.jm}
+                              <td className="right" style={{fontWeight:1000,color:e.kind==="ULAZ" ? "#16803a" : e.kind==="POPIS" ? "#1c2f82" : (e.booked === false || !["POSLATO","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase())) ? "#6b7280" : "#c2410c"}}>
+                                {e.kind === "POPIS"
+                                  ? qtyLabel(Number(e.qty||0))
+                                  : e.kind === "ULAZ"
+                                    ? `+${qtyLabel(Number(e.qty||0))}`
+                                    : (e.booked === false || !["POSLATO","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase()))
+                                      ? `${qtyLabel(Number(e.qty||0))} traženo`
+                                      : `-${qtyLabel(Number(e.qty||0))}`} {historyArticle.jm}
                               </td>
                             </tr>
                           ))}
@@ -2552,7 +2559,7 @@ async function saveImageAdjust() {
             <h2 style={{ fontSize: 28, color: "#1c2f82" }}>📦 STANJE OD NULE</h2>
             <p className="muted">
               Početno stanje svih artikala je 0. Stanje se računa automatski: <b>ULAZ ROBE − SVA UNEŠENA TREBOVANJA = TRENUTNO STANJE</b>.
-              Čim prodavnica pošalje trebovanje, količina se odmah skida sa stanja centralnog magacina. Status magacionera ne menja ovu računicu.
+              Trebovanje iz prodavnice ne menja stanje. Količina se skida tek kada magacioner potvrdi da je roba spakovana.
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(250px,1fr))", gap: 14, marginTop: 16 }}>
               {stock.map((s) => {

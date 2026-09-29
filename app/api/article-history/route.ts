@@ -65,13 +65,18 @@ export async function GET(req: Request) {
           status: d.status,
         });
       } else if (type === "TREBOVANJE") {
+        const reqStatus = String(d.status || "").toUpperCase();
+        const booked = ["POSLATO", "PRIMLJENO", "ZAVRSENO"].includes(reqStatus);
         events.push({
           kind: "TREBOVANJE",
           created_at: d.created_at,
           qty: Number(row.qty || 0),
-          delta: -Number(row.qty || 0),
+          // NOVO / U PRIPREMI je samo zahtev. Ne knjiži se kao izlaz dok magacioner
+          // ne potvrdi pakovanje i zahtev ne pređe u POSLATO.
+          delta: booked ? -Number(row.qty || 0) : 0,
           detail: `${destinationName || "Prodavnica"}${d.requested_by ? " · " + d.requested_by : ""}`,
           status: d.status,
+          booked,
         });
       } else if (type === "PRENOS") {
         events.push({
