@@ -66,20 +66,38 @@ export async function GET() {
       );
     }
 
-    const [{ data: stock, error: stockErr }, images] = await Promise.all([
+    const [{ data: stock, error: stockErr }, { data: articlePositions }, images] = await Promise.all([
       admin
         .from("cm_stock_view")
         .select("article_id,sifra,naziv,barkod,jm,stanje")
         .order("naziv"),
+      admin.from("cm_articles").select("id,image_zoom,image_x,image_y"),
       articleImageMap(),
     ]);
 
     if (stockErr) throw stockErr;
 
-    const safeStock = (stock || []).map((x: any) => ({
-      ...x,
-      image_url: images.get(String(x.article_id)) || null,
-    }));
+    const positionMap = new Map(
+      (articlePositions || []).map((a: any) => [
+        String(a.id),
+        {
+          image_zoom: Number(a.image_zoom || 1),
+          image_x: Number(a.image_x || 0),
+          image_y: Number(a.image_y || 0),
+        },
+      ])
+    );
+
+    const safeStock = (stock || []).map((x: any) => {
+      const position = positionMap.get(String(x.article_id)) || { image_zoom: 1, image_x: 0, image_y: 0 };
+      return {
+        ...x,
+        image_url: images.get(String(x.article_id)) || null,
+        image_zoom: position.image_zoom,
+        image_x: position.image_x,
+        image_y: position.image_y,
+      };
+    });
 
     return NextResponse.json({ ok: true, user: s, location, stock: safeStock });
   } catch (e: any) {

@@ -19,6 +19,9 @@ type Stock = {
   maloprodajna_cena?: number;
   vrednost?: number;
   image_url?: string | null;
+  image_zoom?: number;
+  image_x?: number;
+  image_y?: number;
   initial_qty?: number;
   inbound_qty?: number;
   outbound_qty?: number;
@@ -302,6 +305,11 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [savingInventory, setSavingInventory] = useState(false);
   const [historyArticle, setHistoryArticle] = useState<Stock | null>(null);
   const [articleHistory, setArticleHistory] = useState<ArticleHistory | null>(null);
+  const [imageAdjustArticle, setImageAdjustArticle] = useState<Stock | null>(null);
+  const [imageAdjustZoom, setImageAdjustZoom] = useState(1);
+  const [imageAdjustX, setImageAdjustX] = useState(0);
+  const [imageAdjustY, setImageAdjustY] = useState(0);
+  const [savingImageAdjust, setSavingImageAdjust] = useState(false);
   const [historyBusy, setHistoryBusy] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("SVE");
   const [notificationPermission, setNotificationPermission] = useState("default");
@@ -605,6 +613,47 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
   async function printAdminRequest() {
     await bookAdminRequest(true);
   }
+
+
+function openImageAdjust(article: Stock) {
+  setImageAdjustArticle(article);
+  setImageAdjustZoom(Number(article.image_zoom || 1));
+  setImageAdjustX(Number(article.image_x || 0));
+  setImageAdjustY(Number(article.image_y || 0));
+}
+
+async function saveImageAdjust() {
+  if (!imageAdjustArticle) return;
+  setSavingImageAdjust(true);
+  try {
+    const r = await fetch("/api/article-image-position", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        article_id: imageAdjustArticle.article_id,
+        image_zoom: imageAdjustZoom,
+        image_x: imageAdjustX,
+        image_y: imageAdjustY,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.message || "Greška pri čuvanju podešavanja slike.");
+
+    setStock((prev) =>
+      prev.map((x) =>
+        x.article_id === imageAdjustArticle.article_id
+          ? { ...x, image_zoom: imageAdjustZoom, image_x: imageAdjustX, image_y: imageAdjustY }
+          : x
+      )
+    );
+    setImageAdjustArticle(null);
+    setMsg("Podešavanje slike je sačuvano.");
+  } catch (e: any) {
+    alert(e?.message || "Greška pri čuvanju podešavanja slike.");
+  } finally {
+    setSavingImageAdjust(false);
+  }
+}
 
   async function openArticleHistory(article: Stock) {
     setHistoryArticle(article);
@@ -1710,6 +1759,128 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
           </div>
         )}
 
+        {imageAdjustArticle && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "#0009",
+              zIndex: 9999,
+              display: "grid",
+              placeItems: "center",
+              padding: 16,
+            }}
+            onClick={() => setImageAdjustArticle(null)}
+          >
+            <div
+              style={{
+                width: "min(520px, 96vw)",
+                background: "white",
+                borderRadius: 20,
+                padding: 18,
+                boxShadow: "0 20px 70px #0006",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 style={{ margin: "0 0 4px", color: "#1c2f82" }}>Podesi sliku</h2>
+              <div className="muted" style={{ marginBottom: 12 }}>
+                {imageAdjustArticle.naziv} · Šifra {imageAdjustArticle.sifra}
+              </div>
+
+              <div
+                style={{
+                  height: 260,
+                  borderRadius: 16,
+                  background: "#f3f5f9",
+                  overflow: "hidden",
+                  display: "grid",
+                  placeItems: "center",
+                  border: "1px solid #dbe2ef",
+                }}
+              >
+                <img
+                  src={imageAdjustArticle.image_url || images[articleImageKey(imageAdjustArticle)]}
+                  alt={imageAdjustArticle.naziv}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    transform: `translate(${imageAdjustX}%, ${imageAdjustY}%) scale(${imageAdjustZoom})`,
+                    transformOrigin: "center center",
+                  }}
+                />
+              </div>
+
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontWeight: 900, marginBottom: 5 }}>Zoom: {imageAdjustZoom.toFixed(2)}×</div>
+                <input
+                  type="range"
+                  min="0.7"
+                  max="2.2"
+                  step="0.05"
+                  value={imageAdjustZoom}
+                  onChange={(e) => setImageAdjustZoom(Number(e.target.value))}
+                  style={{ width: "100%" }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 900, marginBottom: 5 }}>Levo / desno: {imageAdjustX}</div>
+                  <input
+                    type="range"
+                    min="-50"
+                    max="50"
+                    step="1"
+                    value={imageAdjustX}
+                    onChange={(e) => setImageAdjustX(Number(e.target.value))}
+                    style={{ width: "100%" }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 900, marginBottom: 5 }}>Gore / dole: {imageAdjustY}</div>
+                  <input
+                    type="range"
+                    min="-50"
+                    max="50"
+                    step="1"
+                    value={imageAdjustY}
+                    onChange={(e) => setImageAdjustY(Number(e.target.value))}
+                    style={{ width: "100%" }}
+                  />
+                </div>
+              </div>
+
+              <div className="row" style={{ marginTop: 14 }}>
+                <button
+                  type="button"
+                  className="btn btnGhost"
+                  onClick={() => {
+                    setImageAdjustZoom(1);
+                    setImageAdjustX(0);
+                    setImageAdjustY(0);
+                  }}
+                >
+                  VRATI NA POČETNO
+                </button>
+                <div className="grow" />
+                <button type="button" className="btn btnGhost" onClick={() => setImageAdjustArticle(null)}>
+                  OTKAŽI
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={saveImageAdjust}
+                  disabled={savingImageAdjust}
+                  style={{ background: "#ef7d00", color: "white" }}
+                >
+                  {savingImageAdjust ? "ČUVAM..." : "SAČUVAJ"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {historyArticle && (
           <div
             onClick={() => setHistoryArticle(null)}
@@ -2507,13 +2678,31 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
                       <td style={{ minWidth: 145 }}>
                         <div style={{ display: "grid", gap: 6, justifyItems: "center" }}>
                           {(s.image_url || images[articleImageKey(s)]) ? (
-                            <img
-                              src={s.image_url || images[articleImageKey(s)]}
-                              alt={s.naziv}
-                              style={{ width: 76, height: 76, objectFit: "contain", borderRadius: 10, background: "#f7f9fc" }}
-                            />
+                            <div style={{ width: 76, height: 76, borderRadius: 10, background: "#f7f9fc", overflow: "hidden", display: "grid", placeItems: "center" }}>
+                              <img
+                                src={s.image_url || images[articleImageKey(s)]}
+                                alt={s.naziv}
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "contain",
+                                  transform: `translate(${Number(s.image_x || 0)}%, ${Number(s.image_y || 0)}%) scale(${Number(s.image_zoom || 1)})`,
+                                  transformOrigin: "center center",
+                                }}
+                              />
+                            </div>
                           ) : (
                             <div style={{ width: 76, height: 76, borderRadius: 10, background: "#f7f9fc", display: "grid", placeItems: "center", fontSize: 28 }}>📷</div>
+                          )}
+                          {(s.image_url || images[articleImageKey(s)]) && (
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() => openImageAdjust(s)}
+                              style={{ width: "100%", background: "#1c2f82", color: "white", minHeight: 30, fontSize: 10, padding: "6px 8px" }}
+                            >
+                              PODESI SLIKU
+                            </button>
                           )}
                           {s.image_url ? null : (
                             <>

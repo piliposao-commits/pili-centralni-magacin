@@ -43,7 +43,7 @@ export async function GET() {
     // Ovo automatski uključuje i STARA završena trebovanja.
     const { inboundMap, outboundMap } = await reconcileCentralStock(admin, String(central.id));
 
-    const [{ data: locations }, { data: stock }, { data: reqs }, { data: inbounds }, images] = await Promise.all([
+    const [{ data: locations }, { data: stock }, { data: reqs }, { data: inbounds }, { data: articlePositions }, images] = await Promise.all([
       admin.from("cm_locations").select("id,code,name,type").eq("active", true).order("name"),
       admin.from("cm_stock_view").select("*").order("naziv"),
       admin.from("cm_requests_view").select("*").order("created_at", { ascending: false }).limit(100),
@@ -54,17 +54,33 @@ export async function GET() {
         .eq("destination_location_id", central.id)
         .order("created_at", { ascending: false })
         .limit(100),
+      admin.from("cm_articles").select("id,image_zoom,image_x,image_y"),
       articleImageMap(),
     ]);
 
+    const positionMap = new Map(
+      (articlePositions || []).map((a: any) => [
+        String(a.id),
+        {
+          image_zoom: Number(a.image_zoom || 1),
+          image_x: Number(a.image_x || 0),
+          image_y: Number(a.image_y || 0),
+        },
+      ])
+    );
+
     const safeStock = (stock || []).map((x: any) => {
       const articleId = String(x.article_id);
+      const position = positionMap.get(articleId) || { image_zoom: 1, image_x: 0, image_y: 0 };
       const inbound = Number(inboundMap.get(articleId) || 0);
       const outbound = Number(outboundMap.get(articleId) || 0);
       const calculated = inbound - outbound;
       const row = {
         ...x,
         image_url: images.get(articleId) || null,
+        image_zoom: position.image_zoom,
+        image_x: position.image_x,
+        image_y: position.image_y,
         initial_qty: 0,
         inbound_qty: inbound,
         outbound_qty: outbound,
