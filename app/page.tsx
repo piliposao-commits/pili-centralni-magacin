@@ -1591,18 +1591,23 @@ async function saveImageAdjust() {
                         </div>
 
                         <div className="magPackInfo">
-                          <div className="magPackLine">
-                            <span>Traženo</span>
-                            <b>{qtyLabel(Number(l.qty))} {l.jm}</b>
-                          </div>
-                          <div className="magPackLine">
-                            <span>Stanje</span>
-                            <b>{qtyLabel(l.stock)} {l.jm}</b>
-                          </div>
-                          <div className={`magPackLine ${l.sendQty < Number(l.qty) ? "magPackWarn" : ""}`}>
-                            <span>Spakuj</span>
-                            <b>{qtyLabel(l.sendQty)} {l.jm}</b>
-                          </div>
+                          {l.sendQty === Number(l.qty) ? (
+                            <div className="magPackLine magPackSingleLine">
+                              <span>Traženo</span>
+                              <b>{qtyLabel(Number(l.qty))} {l.jm}</b>
+                            </div>
+                          ) : (
+                            <div className="magPackChangeBox">
+                              <div className="magPackOldQty">
+                                <span>Traženo</span>
+                                <b>{qtyLabel(Number(l.qty))} {l.jm}</b>
+                              </div>
+                              <div className="magPackNewQty">
+                                <span>Spakovano</span>
+                                <b>{qtyLabel(l.sendQty)} {l.jm}</b>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 

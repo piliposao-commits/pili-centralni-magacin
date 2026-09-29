@@ -336,3 +336,75 @@
     min-height:38px;
   }
 }
+
+
+.magPackSingleLine{
+  min-height:72px;
+}
+.magPackChangeBox{
+  display:grid;
+  gap:6px;
+}
+.magPackOldQty,
+.magPackNewQty{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 9px;
+  border-radius:9px;
+  font-size:12px;
+}
+.magPackOldQty{
+  background:#f5f5f5;
+  color:#6b7280;
+}
+.magPackOldQty span,
+.magPackNewQty span{
+  font-size:10px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+.magPackOldQty b{
+  font-size:14px;
+  font-weight:1000;
+  text-decoration:line-through;
+  text-decoration-thickness:2px;
+  text-decoration-color:#dc2626;
+  white-space:nowrap;
+}
+.magPackNewQty{
+  background:#fff7ed;
+  color:#b45309;
+}
+.magPackCardDone .magPackOldQty{
+  background:#d8f2e4;
+  color:#5d6b63;
+}
+.magPackCardDone .magPackNewQty{
+  background:#c9efda;
+  color:#0f6b43;
+}
+.magPackNewQty b{
+  font-size:15px;
+  font-weight:1000;
+  white-space:nowrap;
+}
+@media(max-width:640px){
+  .magPackSingleLine{
+    min-height:58px;
+  }
+  .magPackOldQty,
+  .magPackNewQty{
+    padding:6px 7px;
+    border-radius:8px;
+  }
+  .magPackOldQty span,
+  .magPackNewQty span{
+    font-size:8px;
+  }
+  .magPackOldQty b,
+  .magPackNewQty b{
+    font-size:12px;
+  }
+}
