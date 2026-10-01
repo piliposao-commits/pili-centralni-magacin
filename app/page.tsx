@@ -315,6 +315,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [historyFilter, setHistoryFilter] = useState("SVE");
   const [notificationPermission, setNotificationPermission] = useState("default");
   const [popisUnlocked, setPopisUnlocked] = useState(false);
+  const [calculationUnlocked, setCalculationUnlocked] = useState(false);
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
   const imageMigrationRunningRef = useRef(false);
 
@@ -940,6 +941,7 @@ async function saveImageAdjust() {
 
     setMsg("");
     setScan(null);
+    setCalculationUnlocked(false);
 
     setScanFiles((prev) => {
       const next = [...prev];
@@ -965,11 +967,13 @@ async function saveImageAdjust() {
 
   function removeScanFile(index: number) {
     setScan(null);
+    setCalculationUnlocked(false);
     setScanFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   function clearCalculationPhotos() {
     setScan(null);
+    setCalculationUnlocked(false);
     setScanFiles([]);
     setMsg("");
   }
@@ -991,6 +995,7 @@ async function saveImageAdjust() {
         return;
       }
       setScan(j);
+      setCalculationUnlocked(false);
       if (Array.isArray(j.page_item_counts) && j.page_item_counts.length > 1) {
         const ukupno = (j.items || []).length;
         setMsg(`Spojeno ${j.pages} strana u jednu kalkulaciju — ${ukupno} stavki. Po stranama: ${j.page_item_counts.join(" + ")}.`);
@@ -1000,6 +1005,23 @@ async function saveImageAdjust() {
     } finally {
       setScanBusy(false);
     }
+  }
+
+  function unlockCalculationEditing() {
+    const code = window.prompt("Unesi šifru za otključavanje količine i cene:");
+    if (code === null) return;
+    if (code !== "1234") {
+      setCalculationUnlocked(false);
+      setMsg("Pogrešna šifra. Količina i cena ostaju zaključane.");
+      return;
+    }
+    setCalculationUnlocked(true);
+    setMsg("✓ Količina i cena su otključane za ispravku ove kalkulacije.");
+  }
+
+  function lockCalculationEditing() {
+    setCalculationUnlocked(false);
+    setMsg("Količina i cena su ponovo zaključane.");
   }
 
   function patchItem(i: number, k: string, v: any) {
@@ -1076,6 +1098,7 @@ async function saveImageAdjust() {
 
       setMsg("✓ Ulaz robe je uspešno knjižen.");
       setScan(null);
+      setCalculationUnlocked(false);
       setScanFiles([]);
       await load();
       alert("Ulaz robe je uspešno knjižen.");
@@ -2344,8 +2367,38 @@ async function saveImageAdjust() {
                 </div>
 
                 <div style={{ marginTop: 16 }}>
-                  <div style={{ fontSize: 25, fontWeight: 1000, color: "#1c2f82", marginBottom: 10 }}>
-                    KONTROLA STAVKI
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+                    <div style={{ fontSize: 25, fontWeight: 1000, color: "#1c2f82" }}>
+                      KONTROLA STAVKI
+                    </div>
+                    <button
+                      type="button"
+                      onClick={calculationUnlocked ? lockCalculationEditing : unlockCalculationEditing}
+                      style={{
+                        border: calculationUnlocked ? "2px solid #15915f" : "2px solid #f59e0b",
+                        background: calculationUnlocked ? "#dcfce7" : "#fff7ed",
+                        color: calculationUnlocked ? "#166534" : "#9a3412",
+                        borderRadius: 12,
+                        padding: "10px 14px",
+                        fontWeight: 1000,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {calculationUnlocked ? "🔓 OTKLJUČANO — ZAKLJUČAJ" : "🔒 OTKLJUČAJ KOLIČINU / CENU"}
+                    </button>
+                  </div>
+                  <div style={{
+                    marginBottom: 12,
+                    padding: "8px 10px",
+                    borderRadius: 10,
+                    background: calculationUnlocked ? "#ecfdf5" : "#f8fafc",
+                    color: calculationUnlocked ? "#166534" : "#64748b",
+                    fontSize: 12,
+                    fontWeight: 800,
+                  }}>
+                    {calculationUnlocked
+                      ? "Količina i maloprodajna cena mogu da se isprave."
+                      : "Količina i maloprodajna cena su zaključane. Za ispravku unesi šifru."}
                   </div>
 
                   <div
@@ -2458,7 +2511,14 @@ async function saveImageAdjust() {
                                   type="number"
                                   step="0.001"
                                   value={x.kolicina}
-                                  onChange={(e) => patchItem(i, "kolicina", Number(e.target.value))}
+                                  readOnly={!calculationUnlocked}
+                                  onChange={(e) => calculationUnlocked && patchItem(i, "kolicina", Number(e.target.value))}
+                                  style={{
+                                    background: calculationUnlocked ? "white" : "#f1f5f9",
+                                    color: calculationUnlocked ? "#10213a" : "#64748b",
+                                    cursor: calculationUnlocked ? "text" : "not-allowed",
+                                    fontWeight: 900,
+                                  }}
                                 />
                               </div>
                             </div>
@@ -2469,7 +2529,14 @@ async function saveImageAdjust() {
                                 type="number"
                                 step="0.01"
                                 value={x.maloprodajna_cena}
-                                onChange={(e) => patchItem(i, "maloprodajna_cena", Number(e.target.value))}
+                                readOnly={!calculationUnlocked}
+                                onChange={(e) => calculationUnlocked && patchItem(i, "maloprodajna_cena", Number(e.target.value))}
+                                style={{
+                                  background: calculationUnlocked ? "white" : "#f1f5f9",
+                                  color: calculationUnlocked ? "#10213a" : "#64748b",
+                                  cursor: calculationUnlocked ? "text" : "not-allowed",
+                                  fontWeight: 900,
+                                }}
                               />
                             </div>
 
