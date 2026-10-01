@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { admin, requireSession } from "@/lib/server";
+import { reconcileCentralStock } from "@/lib/centralStock";
 
 function cleanBarcode(value: unknown) {
   const s = String(value ?? "").trim();
@@ -97,5 +98,65 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, document_id: doc.id, processed });
   } catch (e: any) {
     return NextResponse.json({ ok: false, message: String(e?.message || "Greška pri knjiženju ulaza robe.") }, { status: 400 });
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    await requireSession("ADMIN");
+    const b = await req.json();
+    const documentId = String(b?.document_id || "").trim();
+    const rawLines = Array.isArray(b?.lines) ? b.lines : [];
+    if (!documentId || !rawLines.length) {
+      return NextResponse.json({ ok: false, message: "Nedostaje kalkulacija ili stavke za ispravku." }, { status: 400 });
+    }
+
+    const { data: central, error: centralError } = await admin.from("cm_locations").select("id").eq("type", "CENTRAL").limit(1).maybeSingle();
+    if (centralError) throw centralError;
+    if (!central) throw new Error("Centralni magacin nije pronađen.");
+
+    const { data: doc, error: docError } = await admin
+      .from("cm_documents")
+      .select("id,type,status,destination_location_id")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (docError) throw docError;
+    if (!doc || String(doc.type).toUpperCase() !== "ULAZ" || String(doc.status).toUpperCase() !== "ZAVRSENO" || String(doc.destination_location_id) !== String(central.id)) {
+      return NextResponse.json({ ok: false, message: "Ova kalkulacija ne može da se ispravlja." }, { status: 400 });
+    }
+
+    const { data: existingLines, error: linesError } = await admin
+      .from("cm_document_lines")
+      .select("id,document_id,article_id,qty,price")
+      .eq("document_id", documentId);
+    if (linesError) throw linesError;
+    const byId = new Map((existingLines || []).map((x: any) => [String(x.id), x]));
+
+    for (const raw of rawLines) {
+      const id = String(raw?.id || "").trim();
+      const qty = Number(raw?.qty);
+      const price = Number(raw?.price);
+      const old = byId.get(id);
+      if (!old) return NextResponse.json({ ok: false, message: "Jedna stavka ne pripada ovoj kalkulaciji." }, { status: 400 });
+      if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price < 0) {
+        return NextResponse.json({ ok: false, message: "Količina mora biti veća od 0, a cena 0 ili više." }, { status: 400 });
+      }
+
+      const { error: lineUpdateError } = await admin.from("cm_document_lines").update({ qty, price }).eq("id", id).eq("document_id", documentId);
+      if (lineUpdateError) throw lineUpdateError;
+
+      if (old.article_id) {
+        const { error: articleUpdateError } = await admin.from("cm_articles").update({ maloprodajna_cena: price, updated_at: new Date().toISOString() }).eq("id", old.article_id);
+        if (articleUpdateError) throw articleUpdateError;
+      }
+    }
+
+    // Stanje se računa iz knjige: svi završeni ulazi minus samo spakovana trebovanja.
+    // Zato korekcija stare kalkulacije odmah i bez duplog knjiženja menja stanje za razliku.
+    await reconcileCentralStock(admin, String(central.id));
+
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, message: String(e?.message || "Greška pri ispravci kalkulacije.") }, { status: 400 });
   }
 }

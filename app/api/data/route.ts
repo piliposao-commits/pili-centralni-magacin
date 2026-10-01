@@ -49,7 +49,7 @@ export async function GET() {
       admin.from("cm_requests_view").select("*").order("created_at", { ascending: false }).limit(100),
       admin
         .from("cm_documents")
-        .select("id,document_no,supplier,status,created_at,cm_document_lines(id,sifra,naziv,barkod,jm,qty,price)")
+        .select("id,document_no,supplier,status,created_at,cm_document_lines(id,article_id,sifra,naziv,barkod,jm,qty,price)")
         .eq("type", "ULAZ")
         .eq("destination_location_id", central.id)
         .order("created_at", { ascending: false })

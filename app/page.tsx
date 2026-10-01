@@ -65,6 +65,7 @@ type Req = {
 
 type InboundLine = {
   id: string;
+  article_id?: string;
   sifra: string;
   naziv: string;
   barkod: string | null;
@@ -278,6 +279,9 @@ export default function Page() {
   const [requests, setRequests] = useState<Req[]>([]);
   const [inboundDocs, setInboundDocs] = useState<InboundDoc[]>([]);
   const [openInboundId, setOpenInboundId] = useState<string | null>(null);
+  const [editingInboundId, setEditingInboundId] = useState<string | null>(null);
+  const [editingInboundLines, setEditingInboundLines] = useState<InboundLine[]>([]);
+  const [savingInboundCorrection, setSavingInboundCorrection] = useState(false);
   const [dest, setDest] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<TransferLine[]>([]);
@@ -1022,6 +1026,53 @@ async function saveImageAdjust() {
   function lockCalculationEditing() {
     setCalculationUnlocked(false);
     setMsg("Količina i cena su ponovo zaključane.");
+  }
+
+  function beginInboundCorrection(doc: InboundDoc) {
+    const code = window.prompt("Unesi šifru za otključavanje kalkulacije:");
+    if (code === null) return;
+    if (code !== "1234") {
+      setMsg("Pogrešna šifra. Kalkulacija ostaje zaključana.");
+      return;
+    }
+    setEditingInboundId(doc.id);
+    setEditingInboundLines((doc.lines || []).map((x) => ({ ...x, qty: Number(x.qty || 0), price: Number(x.price || 0) })));
+    setMsg("✓ Kalkulacija je otključana. Ispravi količinu ili cenu i sačuvaj.");
+  }
+
+  function patchInboundLine(lineId: string, key: "qty" | "price", value: number) {
+    setEditingInboundLines((prev) => prev.map((x) => x.id === lineId ? { ...x, [key]: value } : x));
+  }
+
+  async function saveInboundCorrection(documentId: string) {
+    if (savingInboundCorrection) return;
+    const invalid = editingInboundLines.find((x) => !Number.isFinite(Number(x.qty)) || Number(x.qty) <= 0 || !Number.isFinite(Number(x.price)) || Number(x.price) < 0);
+    if (invalid) {
+      setMsg(`Proveri stavku ${invalid.naziv || invalid.sifra}: količina mora biti veća od 0, a cena 0 ili više.`);
+      return;
+    }
+    setSavingInboundCorrection(true);
+    setMsg("Čuvam ispravku kalkulacije...");
+    try {
+      const r = await fetch("/api/inbound", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          document_id: documentId,
+          lines: editingInboundLines.map((x) => ({ id: x.id, qty: Number(x.qty), price: Number(x.price) })),
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.ok) throw new Error(j?.message || "Ispravka nije sačuvana.");
+      setEditingInboundId(null);
+      setEditingInboundLines([]);
+      setMsg("✓ Ispravka kalkulacije je sačuvana i stanje je preračunato.");
+      await load();
+    } catch (e: any) {
+      setMsg(String(e?.message || "Greška pri čuvanju ispravke."));
+    } finally {
+      setSavingInboundCorrection(false);
+    }
   }
 
   function patchItem(i: number, k: string, v: any) {
@@ -2289,6 +2340,22 @@ async function saveImageAdjust() {
 
                         {opened && (
                           <div style={{ padding: "0 12px 10px", background: "#fbfdff" }}>
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 0" }}>
+                              {editingInboundId === doc.id ? (
+                                <>
+                                  <button type="button" className="btnGhost" disabled={savingInboundCorrection} onClick={() => { setEditingInboundId(null); setEditingInboundLines([]); setMsg("Ispravka je otkazana."); }}>OTKAŽI</button>
+                                  <button type="button" className="btn" disabled={savingInboundCorrection} onClick={() => saveInboundCorrection(doc.id)}>{savingInboundCorrection ? "ČUVAM..." : "SAČUVAJ ISPRAVKU"}</button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => beginInboundCorrection(doc)}
+                                  style={{ border: "2px solid #f59e0b", background: "#fff7ed", color: "#9a3412", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: "pointer" }}
+                                >
+                                  🔒 ISPRAVI KALKULACIJU
+                                </button>
+                              )}
+                            </div>
                             <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: 12, background: "white" }}>
                               <table className="table" style={{ minWidth: 720 }}>
                                 <thead>
@@ -2297,20 +2364,31 @@ async function saveImageAdjust() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {lines.map((line) => (
+                                  {(editingInboundId === doc.id ? editingInboundLines : lines).map((line) => (
                                     <tr key={line.id}>
                                       <td>{line.sifra}</td>
                                       <td><b>{line.naziv}</b></td>
                                       <td>{line.barkod || "—"}</td>
                                       <td>{line.jm}</td>
-                                      <td className="right">{qtyLabel(Number(line.qty || 0))}</td>
-                                      <td className="right">{money(Number(line.price || 0))}</td>
+                                      <td className="right">
+                                        {editingInboundId === doc.id ? (
+                                          <input className="search" inputMode="decimal" value={String(line.qty ?? "")} onChange={(e) => patchInboundLine(line.id, "qty", Number(e.target.value.replace(",", ".")))} style={{ width: 110, textAlign: "right", padding: "7px 8px", fontWeight: 900 }} />
+                                        ) : qtyLabel(Number(line.qty || 0))}
+                                      </td>
+                                      <td className="right">
+                                        {editingInboundId === doc.id ? (
+                                          <input className="search" inputMode="decimal" value={String(line.price ?? "")} onChange={(e) => patchInboundLine(line.id, "price", Number(e.target.value.replace(",", ".")))} style={{ width: 125, textAlign: "right", padding: "7px 8px", fontWeight: 900 }} />
+                                        ) : money(Number(line.price || 0))}
+                                      </td>
                                       <td className="right"><b>{money(Number(line.qty || 0) * Number(line.price || 0))}</b></td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
                             </div>
+                            {editingInboundId === doc.id && (
+                              <div style={{ marginTop: 8, fontSize: 12, color: "#9a3412", fontWeight: 800 }}>Otključano šifrom 1234. Posle čuvanja stanje i vrednost magacina se automatski preračunavaju.</div>
+                            )}
                           </div>
                         )}
                       </div>
