@@ -160,3 +160,63 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: false, message: String(e?.message || "Greška pri ispravci kalkulacije.") }, { status: 400 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    await requireSession("ADMIN");
+    const b = await req.json().catch(() => ({}));
+    const documentId = String(b?.document_id || "").trim();
+    const code = String(b?.code || "");
+
+    if (code !== "1234") {
+      return NextResponse.json({ ok: false, message: "Pogrešna šifra za brisanje kalkulacije." }, { status: 403 });
+    }
+    if (!documentId) {
+      return NextResponse.json({ ok: false, message: "Nedostaje kalkulacija za brisanje." }, { status: 400 });
+    }
+
+    const { data: central, error: centralError } = await admin
+      .from("cm_locations")
+      .select("id")
+      .eq("type", "CENTRAL")
+      .limit(1)
+      .maybeSingle();
+    if (centralError) throw centralError;
+    if (!central) throw new Error("Centralni magacin nije pronađen.");
+
+    const { data: doc, error: docError } = await admin
+      .from("cm_documents")
+      .select("id,type,status,destination_location_id,supplier,document_no")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (docError) throw docError;
+
+    if (
+      !doc ||
+      String(doc.type).toUpperCase() !== "ULAZ" ||
+      String(doc.status).toUpperCase() !== "ZAVRSENO" ||
+      String(doc.destination_location_id) !== String(central.id)
+    ) {
+      return NextResponse.json(
+        { ok: false, message: "Može da se obriše samo završena kalkulacija ulaza centralnog magacina." },
+        { status: 400 }
+      );
+    }
+
+    const { error: deleteError } = await admin
+      .from("cm_documents")
+      .delete()
+      .eq("id", documentId);
+    if (deleteError) throw deleteError;
+
+    await reconcileCentralStock(admin, String(central.id));
+
+    return NextResponse.json({ ok: true, deleted_document_id: documentId });
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, message: String(e?.message || "Greška pri brisanju kalkulacije.") },
+      { status: 400 }
+    );
+  }
+}
+

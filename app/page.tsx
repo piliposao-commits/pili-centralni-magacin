@@ -1075,6 +1075,44 @@ async function saveImageAdjust() {
     }
   }
 
+
+  async function deleteInboundCalculation(doc: InboundDoc) {
+    const code = window.prompt("Unesi šifru za BRISANJE cele kalkulacije:");
+    if (code === null) return;
+    if (code !== "1234") {
+      setMsg("Pogrešna šifra. Kalkulacija nije obrisana.");
+      return;
+    }
+
+    const supplier = doc.supplier || "bez dobavljača";
+    const documentNo = doc.document_no || "bez broja";
+    const ok = window.confirm(
+      `OBRISATI CELU KALKULACIJU?\n\nDobavljač: ${supplier}\nDokument: ${documentNo}\n\nOvo će ukloniti ceo ulaz i automatski vratiti stanje magacina za količine iz te kalkulacije.`
+    );
+    if (!ok) return;
+
+    setMsg("Brišem kalkulaciju i preračunavam stanje...");
+    try {
+      const r = await fetch("/api/inbound", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ document_id: doc.id, code }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.ok) throw new Error(j?.message || "Kalkulacija nije obrisana.");
+
+      if (openInboundId === doc.id) setOpenInboundId(null);
+      if (editingInboundId === doc.id) {
+        setEditingInboundId(null);
+        setEditingInboundLines([]);
+      }
+      setMsg("✓ Kalkulacija je obrisana. Stanje centralnog magacina je automatski preračunato.");
+      await load();
+    } catch (e: any) {
+      setMsg(String(e?.message || "Greška pri brisanju kalkulacije."));
+    }
+  }
+
   function patchItem(i: number, k: string, v: any) {
     setScan({
       ...scan,
@@ -2347,13 +2385,22 @@ async function saveImageAdjust() {
                                   <button type="button" className="btn" disabled={savingInboundCorrection} onClick={() => saveInboundCorrection(doc.id)}>{savingInboundCorrection ? "ČUVAM..." : "SAČUVAJ ISPRAVKU"}</button>
                                 </>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => beginInboundCorrection(doc)}
-                                  style={{ border: "2px solid #f59e0b", background: "#fff7ed", color: "#9a3412", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: "pointer" }}
-                                >
-                                  🔒 ISPRAVI KALKULACIJU
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => beginInboundCorrection(doc)}
+                                    style={{ border: "2px solid #f59e0b", background: "#fff7ed", color: "#9a3412", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: "pointer" }}
+                                  >
+                                    🔒 ISPRAVI KALKULACIJU
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteInboundCalculation(doc)}
+                                    style={{ border: "2px solid #dc2626", background: "#fff1f2", color: "#b91c1c", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: "pointer" }}
+                                  >
+                                    🗑 OBRIŠI KALKULACIJU
+                                  </button>
+                                </>
                               )}
                             </div>
                             <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: 12, background: "white" }}>
