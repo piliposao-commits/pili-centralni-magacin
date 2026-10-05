@@ -1037,18 +1037,18 @@ async function saveImageAdjust() {
     }
     setEditingInboundId(doc.id);
     setEditingInboundLines((doc.lines || []).map((x) => ({ ...x, qty: Number(x.qty || 0), price: Number(x.price || 0) })));
-    setMsg("✓ Kalkulacija je otključana. Ispravi količinu ili cenu i sačuvaj.");
+    setMsg("✓ Kalkulacija je otključana. Možeš ispraviti šifru, količinu ili cenu i sačuvati.");
   }
 
-  function patchInboundLine(lineId: string, key: "qty" | "price", value: number) {
+  function patchInboundLine(lineId: string, key: "sifra" | "qty" | "price", value: string | number) {
     setEditingInboundLines((prev) => prev.map((x) => x.id === lineId ? { ...x, [key]: value } : x));
   }
 
   async function saveInboundCorrection(documentId: string) {
     if (savingInboundCorrection) return;
-    const invalid = editingInboundLines.find((x) => !Number.isFinite(Number(x.qty)) || Number(x.qty) <= 0 || !Number.isFinite(Number(x.price)) || Number(x.price) < 0);
+    const invalid = editingInboundLines.find((x) => !String(x.sifra || "").trim() || !Number.isFinite(Number(x.qty)) || Number(x.qty) <= 0 || !Number.isFinite(Number(x.price)) || Number(x.price) < 0);
     if (invalid) {
-      setMsg(`Proveri stavku ${invalid.naziv || invalid.sifra}: količina mora biti veća od 0, a cena 0 ili više.`);
+      setMsg(`Proveri stavku ${invalid.naziv || invalid.sifra}: šifra mora biti upisana, količina veća od 0, a cena 0 ili više.`);
       return;
     }
     setSavingInboundCorrection(true);
@@ -1059,57 +1059,19 @@ async function saveImageAdjust() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           document_id: documentId,
-          lines: editingInboundLines.map((x) => ({ id: x.id, qty: Number(x.qty), price: Number(x.price) })),
+          lines: editingInboundLines.map((x) => ({ id: x.id, sifra: String(x.sifra || "").trim(), qty: Number(x.qty), price: Number(x.price) })),
         }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j?.ok) throw new Error(j?.message || "Ispravka nije sačuvana.");
       setEditingInboundId(null);
       setEditingInboundLines([]);
-      setMsg("✓ Ispravka kalkulacije je sačuvana i stanje je preračunato.");
+      setMsg("✓ Ispravka kalkulacije je sačuvana, šifre su povezane sa pravim artiklima i stanje je preračunato.");
       await load();
     } catch (e: any) {
       setMsg(String(e?.message || "Greška pri čuvanju ispravke."));
     } finally {
       setSavingInboundCorrection(false);
-    }
-  }
-
-
-  async function deleteInboundCalculation(doc: InboundDoc) {
-    const code = window.prompt("Unesi šifru za BRISANJE cele kalkulacije:");
-    if (code === null) return;
-    if (code !== "1234") {
-      setMsg("Pogrešna šifra. Kalkulacija nije obrisana.");
-      return;
-    }
-
-    const supplier = doc.supplier || "bez dobavljača";
-    const documentNo = doc.document_no || "bez broja";
-    const ok = window.confirm(
-      `OBRISATI CELU KALKULACIJU?\n\nDobavljač: ${supplier}\nDokument: ${documentNo}\n\nOvo će ukloniti ceo ulaz i automatski vratiti stanje magacina za količine iz te kalkulacije.`
-    );
-    if (!ok) return;
-
-    setMsg("Brišem kalkulaciju i preračunavam stanje...");
-    try {
-      const r = await fetch("/api/inbound", {
-        method: "DELETE",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ document_id: doc.id, code }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j?.ok) throw new Error(j?.message || "Kalkulacija nije obrisana.");
-
-      if (openInboundId === doc.id) setOpenInboundId(null);
-      if (editingInboundId === doc.id) {
-        setEditingInboundId(null);
-        setEditingInboundLines([]);
-      }
-      setMsg("✓ Kalkulacija je obrisana. Stanje centralnog magacina je automatski preračunato.");
-      await load();
-    } catch (e: any) {
-      setMsg(String(e?.message || "Greška pri brisanju kalkulacije."));
     }
   }
 
@@ -2385,22 +2347,13 @@ async function saveImageAdjust() {
                                   <button type="button" className="btn" disabled={savingInboundCorrection} onClick={() => saveInboundCorrection(doc.id)}>{savingInboundCorrection ? "ČUVAM..." : "SAČUVAJ ISPRAVKU"}</button>
                                 </>
                               ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => beginInboundCorrection(doc)}
-                                    style={{ border: "2px solid #f59e0b", background: "#fff7ed", color: "#9a3412", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: "pointer" }}
-                                  >
-                                    🔒 ISPRAVI KALKULACIJU
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteInboundCalculation(doc)}
-                                    style={{ border: "2px solid #dc2626", background: "#fff1f2", color: "#b91c1c", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: "pointer" }}
-                                  >
-                                    🗑 OBRIŠI KALKULACIJU
-                                  </button>
-                                </>
+                                <button
+                                  type="button"
+                                  onClick={() => beginInboundCorrection(doc)}
+                                  style={{ border: "2px solid #f59e0b", background: "#fff7ed", color: "#9a3412", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: "pointer" }}
+                                >
+                                  🔒 ISPRAVI KALKULACIJU
+                                </button>
                               )}
                             </div>
                             <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: 12, background: "white" }}>
@@ -2413,7 +2366,11 @@ async function saveImageAdjust() {
                                 <tbody>
                                   {(editingInboundId === doc.id ? editingInboundLines : lines).map((line) => (
                                     <tr key={line.id}>
-                                      <td>{line.sifra}</td>
+                                      <td>
+                                        {editingInboundId === doc.id ? (
+                                          <input className="search" inputMode="numeric" value={String(line.sifra ?? "")} onChange={(e) => patchInboundLine(line.id, "sifra", e.target.value)} style={{ width: 95, padding: "7px 8px", fontWeight: 900 }} />
+                                        ) : line.sifra}
+                                      </td>
                                       <td><b>{line.naziv}</b></td>
                                       <td>{line.barkod || "—"}</td>
                                       <td>{line.jm}</td>
@@ -2434,7 +2391,7 @@ async function saveImageAdjust() {
                               </table>
                             </div>
                             {editingInboundId === doc.id && (
-                              <div style={{ marginTop: 8, fontSize: 12, color: "#9a3412", fontWeight: 800 }}>Otključano šifrom 1234. Posle čuvanja stanje i vrednost magacina se automatski preračunavaju.</div>
+                              <div style={{ marginTop: 8, fontSize: 12, color: "#9a3412", fontWeight: 800 }}>Otključano šifrom 1234. Možeš menjati šifru, količinu i cenu. Nova šifra mora već postojati u artiklima. Posle čuvanja stanje i vrednost se automatski preračunavaju.</div>
                             )}
                           </div>
                         )}

@@ -127,26 +127,58 @@ export async function PATCH(req: Request) {
 
     const { data: existingLines, error: linesError } = await admin
       .from("cm_document_lines")
-      .select("id,document_id,article_id,qty,price")
+      .select("id,document_id,article_id,sifra,naziv,barkod,jm,qty,price")
       .eq("document_id", documentId);
     if (linesError) throw linesError;
     const byId = new Map((existingLines || []).map((x: any) => [String(x.id), x]));
 
     for (const raw of rawLines) {
       const id = String(raw?.id || "").trim();
+      const sifra = String(raw?.sifra || "").trim();
       const qty = Number(raw?.qty);
       const price = Number(raw?.price);
       const old = byId.get(id);
       if (!old) return NextResponse.json({ ok: false, message: "Jedna stavka ne pripada ovoj kalkulaciji." }, { status: 400 });
-      if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price < 0) {
-        return NextResponse.json({ ok: false, message: "Količina mora biti veća od 0, a cena 0 ili više." }, { status: 400 });
+      if (!sifra || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price < 0) {
+        return NextResponse.json({ ok: false, message: "Šifra mora biti upisana, količina veća od 0, a cena 0 ili više." }, { status: 400 });
       }
 
-      const { error: lineUpdateError } = await admin.from("cm_document_lines").update({ qty, price }).eq("id", id).eq("document_id", documentId);
+      let targetArticleId = String(old.article_id || "");
+      let linePatch: any = { qty, price };
+
+      if (sifra !== String(old.sifra || "").trim()) {
+        const { data: target, error: targetError } = await admin
+          .from("cm_articles")
+          .select("id,sifra,naziv,barkod,jm")
+          .eq("sifra", sifra)
+          .maybeSingle();
+        if (targetError) throw targetError;
+        if (!target) {
+          return NextResponse.json({ ok: false, message: `Šifra ${sifra} ne postoji u artiklima. Prvo proveri tačnu šifru.` }, { status: 400 });
+        }
+        targetArticleId = String(target.id);
+        linePatch = {
+          ...linePatch,
+          article_id: target.id,
+          sifra: target.sifra,
+          naziv: target.naziv,
+          barkod: target.barkod,
+          jm: target.jm,
+        };
+      }
+
+      const { error: lineUpdateError } = await admin
+        .from("cm_document_lines")
+        .update(linePatch)
+        .eq("id", id)
+        .eq("document_id", documentId);
       if (lineUpdateError) throw lineUpdateError;
 
-      if (old.article_id) {
-        const { error: articleUpdateError } = await admin.from("cm_articles").update({ maloprodajna_cena: price, updated_at: new Date().toISOString() }).eq("id", old.article_id);
+      if (targetArticleId) {
+        const { error: articleUpdateError } = await admin
+          .from("cm_articles")
+          .update({ maloprodajna_cena: price, updated_at: new Date().toISOString() })
+          .eq("id", targetArticleId);
         if (articleUpdateError) throw articleUpdateError;
       }
     }
@@ -160,63 +192,3 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: false, message: String(e?.message || "Greška pri ispravci kalkulacije.") }, { status: 400 });
   }
 }
-
-export async function DELETE(req: Request) {
-  try {
-    await requireSession("ADMIN");
-    const b = await req.json().catch(() => ({}));
-    const documentId = String(b?.document_id || "").trim();
-    const code = String(b?.code || "");
-
-    if (code !== "1234") {
-      return NextResponse.json({ ok: false, message: "Pogrešna šifra za brisanje kalkulacije." }, { status: 403 });
-    }
-    if (!documentId) {
-      return NextResponse.json({ ok: false, message: "Nedostaje kalkulacija za brisanje." }, { status: 400 });
-    }
-
-    const { data: central, error: centralError } = await admin
-      .from("cm_locations")
-      .select("id")
-      .eq("type", "CENTRAL")
-      .limit(1)
-      .maybeSingle();
-    if (centralError) throw centralError;
-    if (!central) throw new Error("Centralni magacin nije pronađen.");
-
-    const { data: doc, error: docError } = await admin
-      .from("cm_documents")
-      .select("id,type,status,destination_location_id,supplier,document_no")
-      .eq("id", documentId)
-      .maybeSingle();
-    if (docError) throw docError;
-
-    if (
-      !doc ||
-      String(doc.type).toUpperCase() !== "ULAZ" ||
-      String(doc.status).toUpperCase() !== "ZAVRSENO" ||
-      String(doc.destination_location_id) !== String(central.id)
-    ) {
-      return NextResponse.json(
-        { ok: false, message: "Može da se obriše samo završena kalkulacija ulaza centralnog magacina." },
-        { status: 400 }
-      );
-    }
-
-    const { error: deleteError } = await admin
-      .from("cm_documents")
-      .delete()
-      .eq("id", documentId);
-    if (deleteError) throw deleteError;
-
-    await reconcileCentralStock(admin, String(central.id));
-
-    return NextResponse.json({ ok: true, deleted_document_id: documentId });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, message: String(e?.message || "Greška pri brisanju kalkulacije.") },
-      { status: 400 }
-    );
-  }
-}
-
