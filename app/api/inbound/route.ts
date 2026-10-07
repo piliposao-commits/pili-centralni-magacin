@@ -137,58 +137,93 @@ export async function PATCH(req: Request) {
       const sifra = String(raw?.sifra || "").trim();
       const qty = Number(raw?.qty);
       const price = Number(raw?.price);
-      const old = byId.get(id);
+      const old: any = byId.get(id);
+
       if (!old) return NextResponse.json({ ok: false, message: "Jedna stavka ne pripada ovoj kalkulaciji." }, { status: 400 });
-      if (!sifra || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price < 0) {
-        return NextResponse.json({ ok: false, message: "Šifra mora biti upisana, količina veća od 0, a cena 0 ili više." }, { status: 400 });
+      if (!sifra) return NextResponse.json({ ok: false, message: "Šifra artikla ne može biti prazna." }, { status: 400 });
+      if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price < 0) {
+        return NextResponse.json({ ok: false, message: "Količina mora biti veća od 0, a cena 0 ili više." }, { status: 400 });
       }
 
-      let targetArticleId = String(old.article_id || "");
-      let linePatch: any = { qty, price };
+      let articleId = old.article_id ? String(old.article_id) : null;
+      let lineNaziv = String(old.naziv || sifra);
+      let lineBarkod = cleanBarcode(old.barkod);
+      let lineJm = String(old.jm || "KOM");
 
       if (sifra !== String(old.sifra || "").trim()) {
         const { data: target, error: targetError } = await admin
           .from("cm_articles")
-          .select("id,sifra,naziv,barkod,jm")
+          .select("id,sifra,naziv,barkod,jm,maloprodajna_cena")
           .eq("sifra", sifra)
           .maybeSingle();
         if (targetError) throw targetError;
-        if (!target) {
-          return NextResponse.json({ ok: false, message: `Šifra ${sifra} ne postoji u artiklima. Prvo proveri tačnu šifru.` }, { status: 400 });
+
+        if (target) {
+          articleId = String(target.id);
+          lineNaziv = String(target.naziv || lineNaziv);
+          lineBarkod = cleanBarcode(target.barkod);
+          lineJm = String(target.jm || lineJm);
+          const { error: targetPriceError } = await admin
+            .from("cm_articles")
+            .update({ maloprodajna_cena: price, updated_at: new Date().toISOString() })
+            .eq("id", target.id);
+          if (targetPriceError) throw targetPriceError;
+        } else if (old.article_id) {
+          const { error: articleCodeError } = await admin
+            .from("cm_articles")
+            .update({ sifra, maloprodajna_cena: price, updated_at: new Date().toISOString() })
+            .eq("id", old.article_id);
+          if (articleCodeError) throw articleCodeError;
+          articleId = String(old.article_id);
+        } else {
+          const { data: created, error: createError } = await admin
+            .from("cm_articles")
+            .insert({
+              sifra,
+              naziv: lineNaziv || sifra,
+              barkod: lineBarkod,
+              jm: lineJm || "KOM",
+              maloprodajna_cena: price,
+              active: true,
+            })
+            .select("id,sifra,naziv,barkod,jm")
+            .single();
+          if (createError) throw createError;
+          articleId = String(created.id);
+          lineNaziv = String(created.naziv || lineNaziv);
+          lineBarkod = cleanBarcode(created.barkod);
+          lineJm = String(created.jm || lineJm);
         }
-        targetArticleId = String(target.id);
-        linePatch = {
-          ...linePatch,
-          article_id: target.id,
-          sifra: target.sifra,
-          naziv: target.naziv,
-          barkod: target.barkod,
-          jm: target.jm,
-        };
-      }
-
-      const { error: lineUpdateError } = await admin
-        .from("cm_document_lines")
-        .update(linePatch)
-        .eq("id", id)
-        .eq("document_id", documentId);
-      if (lineUpdateError) throw lineUpdateError;
-
-      if (targetArticleId) {
+      } else if (old.article_id) {
         const { error: articleUpdateError } = await admin
           .from("cm_articles")
           .update({ maloprodajna_cena: price, updated_at: new Date().toISOString() })
-          .eq("id", targetArticleId);
+          .eq("id", old.article_id);
         if (articleUpdateError) throw articleUpdateError;
       }
+
+      const patch: any = {
+        sifra,
+        qty,
+        price,
+        naziv: lineNaziv,
+        barkod: lineBarkod,
+        jm: lineJm,
+      };
+      if (articleId) patch.article_id = articleId;
+
+      const { error: lineUpdateError } = await admin
+        .from("cm_document_lines")
+        .update(patch)
+        .eq("id", id)
+        .eq("document_id", documentId);
+      if (lineUpdateError) throw lineUpdateError;
     }
 
-    // Stanje se računa iz knjige: svi završeni ulazi minus samo spakovana trebovanja.
-    // Zato korekcija stare kalkulacije odmah i bez duplog knjiženja menja stanje za razliku.
     await reconcileCentralStock(admin, String(central.id));
-
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, message: String(e?.message || "Greška pri ispravci kalkulacije.") }, { status: 400 });
   }
 }
+

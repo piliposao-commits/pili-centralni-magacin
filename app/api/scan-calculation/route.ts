@@ -33,19 +33,6 @@ function norm(v: unknown) {
   return String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-const KNOWN_OCR_CODE_CORRECTIONS: Record<string, string> = {
-  "26888": "26996",
-  "26849": "22849",
-  "12884": "12954",
-  "12885": "12955",
-  "29994": "26994",
-};
-
-function correctKnownArticleCode(value: unknown) {
-  const code = String(value ?? "").trim();
-  return KNOWN_OCR_CODE_CORRECTIONS[code] || code;
-}
-
 function itemKey(item: ScanItem) {
   const rb = norm(item.rb);
   if (rb) return `rb:${rb}`;
@@ -149,7 +136,7 @@ Pravila:
       for (const rawItem of page.items || []) {
         const item: ScanItem = {
           rb: rawItem.rb ?? "",
-          sifra: correctKnownArticleCode(rawItem.sifra),
+          sifra: String(rawItem.sifra ?? "").trim(),
           naziv: String(rawItem.naziv ?? "").trim(),
           barkod: String(rawItem.barkod ?? "").trim(),
           jm: String(rawItem.jm ?? "KOM").trim() || "KOM",

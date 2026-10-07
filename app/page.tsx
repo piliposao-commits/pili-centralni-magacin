@@ -1037,7 +1037,7 @@ async function saveImageAdjust() {
     }
     setEditingInboundId(doc.id);
     setEditingInboundLines((doc.lines || []).map((x) => ({ ...x, qty: Number(x.qty || 0), price: Number(x.price || 0) })));
-    setMsg("✓ Kalkulacija je otključana. Možeš ispraviti šifru, količinu ili cenu i sačuvati.");
+    setMsg("✓ Kalkulacija je otključana. Ispravi količinu ili cenu i sačuvaj.");
   }
 
   function patchInboundLine(lineId: string, key: "sifra" | "qty" | "price", value: string | number) {
@@ -1048,7 +1048,7 @@ async function saveImageAdjust() {
     if (savingInboundCorrection) return;
     const invalid = editingInboundLines.find((x) => !String(x.sifra || "").trim() || !Number.isFinite(Number(x.qty)) || Number(x.qty) <= 0 || !Number.isFinite(Number(x.price)) || Number(x.price) < 0);
     if (invalid) {
-      setMsg(`Proveri stavku ${invalid.naziv || invalid.sifra}: šifra mora biti upisana, količina veća od 0, a cena 0 ili više.`);
+      setMsg(`Proveri stavku ${invalid.naziv || invalid.sifra}: šifra je obavezna, količina mora biti veća od 0, a cena 0 ili više.`);
       return;
     }
     setSavingInboundCorrection(true);
@@ -1066,7 +1066,7 @@ async function saveImageAdjust() {
       if (!r.ok || !j?.ok) throw new Error(j?.message || "Ispravka nije sačuvana.");
       setEditingInboundId(null);
       setEditingInboundLines([]);
-      setMsg("✓ Ispravka kalkulacije je sačuvana, šifre su povezane sa pravim artiklima i stanje je preračunato.");
+      setMsg("✓ Ispravka kalkulacije je sačuvana i stanje je preračunato.");
       await load();
     } catch (e: any) {
       setMsg(String(e?.message || "Greška pri čuvanju ispravke."));
@@ -2368,7 +2368,13 @@ async function saveImageAdjust() {
                                     <tr key={line.id}>
                                       <td>
                                         {editingInboundId === doc.id ? (
-                                          <input className="search" inputMode="numeric" value={String(line.sifra ?? "")} onChange={(e) => patchInboundLine(line.id, "sifra", e.target.value)} style={{ width: 95, padding: "7px 8px", fontWeight: 900 }} />
+                                          <input
+                                            className="search"
+                                            value={String(line.sifra ?? "")}
+                                            onChange={(e) => patchInboundLine(line.id, "sifra", e.target.value)}
+                                            style={{ width: 105, padding: "7px 8px", fontWeight: 900 }}
+                                            placeholder="Nova šifra"
+                                          />
                                         ) : line.sifra}
                                       </td>
                                       <td><b>{line.naziv}</b></td>
@@ -2391,7 +2397,7 @@ async function saveImageAdjust() {
                               </table>
                             </div>
                             {editingInboundId === doc.id && (
-                              <div style={{ marginTop: 8, fontSize: 12, color: "#9a3412", fontWeight: 800 }}>Otključano šifrom 1234. Možeš menjati šifru, količinu i cenu. Nova šifra mora već postojati u artiklima. Posle čuvanja stanje i vrednost se automatski preračunavaju.</div>
+                              <div style={{ marginTop: 8, fontSize: 12, color: "#9a3412", fontWeight: 800 }}>Otključano šifrom 1234. Možeš promeniti šifru, količinu i cenu. Nova šifra može biti i nova šifra koja još ne postoji u artiklima.</div>
                             )}
                           </div>
                         )}
