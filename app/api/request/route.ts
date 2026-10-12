@@ -26,6 +26,12 @@ export async function POST(req: Request) {
         p_user_id: session.id,
       });
       if (error) throw error;
+      if (targetStatus === "PRIMLJENO") {
+        const { data: central, error: centralErr } = await admin.from("cm_locations")
+          .select("id").eq("type", "CENTRAL").limit(1).single();
+        if (centralErr || !central?.id) throw centralErr || new Error("Centralni magacin nije pronađen.");
+        await reconcileCentralStock(admin, String(central.id));
+      }
       return NextResponse.json({ ok: true, data, status: targetStatus });
     }
 
@@ -72,15 +78,7 @@ export async function POST(req: Request) {
         .eq("type", "TREBOVANJE");
       if (statusErr) throw statusErr;
 
-      const { data: central, error: centralErr } = await admin
-        .from("cm_locations")
-        .select("id")
-        .eq("type", "CENTRAL")
-        .limit(1)
-        .single();
-      if (centralErr || !central?.id) throw centralErr || new Error("Centralni magacin nije pronađen.");
-      await reconcileCentralStock(admin, String(central.id));
-
+      // Pakovanje ne knjiži robu: za knjiženje je potrebna potvrda ADMINA.
       return NextResponse.json({ ok: true, status: "POSLATO" });
     }
 

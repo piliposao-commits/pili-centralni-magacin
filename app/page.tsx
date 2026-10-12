@@ -502,7 +502,7 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
         const j = await r.json();
         if (!r.ok || !j.ok || stopped) return;
         const rows: Req[] = Array.isArray(j.requests) ? j.requests : [];
-        const readyRows = rows.filter((x) => x.status === "POSLATO");
+        const readyRows = rows.filter((x) => x.status === "NOVO" || x.status === "POSLATO");
         setRequests(rows);
         if (!initialized) {
           readyRows.forEach((x) => known.add(x.id));
@@ -512,11 +512,11 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
         const fresh = readyRows.filter((x) => !known.has(x.id));
         readyRows.forEach((x) => known.add(x.id));
         for (const req of fresh.reverse()) {
-          setMsg(`🔔 Spakovano trebovanje za knjiženje: ${req.location_name}.`);
+          setMsg(`🔔 Trebovanje: ${req.location_name} — ${req.status === "NOVO" ? "NOVO, spremno za štampu" : "SPAKOVANO, čeka knjiženje"}.`);
           playRequestSound();
           if ("Notification" in window && Notification.permission === "granted") {
             try {
-              const title = `Za knjiženje — ${req.location_name}`;
+              const title = `${req.status === "NOVO" ? "Novo trebovanje" : "Za knjiženje"} — ${req.location_name}`;
               const body = `${req.requested_by || "Prodavnica"} · ${(req.lines || []).length} stavki`;
               if ("serviceWorker" in navigator) {
                 const reg = await navigator.serviceWorker.ready;
@@ -616,8 +616,9 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     if (printAfter) window.setTimeout(() => window.print(), 120);
   }
 
-  async function printAdminRequest() {
-    await bookAdminRequest(true);
+  function printAdminRequest() {
+    // Štampa NIKADA ne menja status niti knjiži robu.
+    window.print();
   }
 
 
@@ -929,7 +930,7 @@ async function saveImageAdjust() {
       const j = await r.json();
       if (!j.ok) return setMsg(j.message || "Greška pri potvrdi pakovanja.");
 
-      setMsg("✓ Roba je spakovana. Admin je dobio trebovanje za knjiženje.");
+      setMsg("✓ Šef magacina je potvrdio robu. Admin može da izvrši knjiženje.");
       setActiveReq(null);
       setPrepared([]);
       setReviewOpen(false);
@@ -1241,6 +1242,7 @@ async function saveImageAdjust() {
   const currentDest = stores.find((x) => x.id === dest);
   const unopenedRequests = requests.filter((r) => r.status === "NOVO");
   const workRequests = requests.filter((r) => r.status === "NOVO" || r.status === "U PRIPREMI");
+  const incomingForAdmin = requests.filter((r) => r.status === "NOVO" || r.status === "U PRIPREMI");
   const readyForAdmin = requests.filter((r) => r.status === "POSLATO");
   const bookedRequests = requests.filter((r) => r.status === "PRIMLJENO");
 
@@ -1291,14 +1293,14 @@ async function saveImageAdjust() {
               className="btn"
               onClick={() => openAdminTab("trebovanja")}
               style={{
-                background: readyForAdmin.length > 0 ? "#ef7d00" : (tab === "trebovanja" ? "#1c2f82" : "#f3f6fb"),
-                color: readyForAdmin.length > 0 || tab === "trebovanja" ? "white" : "#172554",
-                border: readyForAdmin.length > 0 ? "2px solid #d96d00" : "1px solid transparent",
+                background: incomingForAdmin.length + readyForAdmin.length > 0 ? "#ef7d00" : (tab === "trebovanja" ? "#1c2f82" : "#f3f6fb"),
+                color: incomingForAdmin.length + readyForAdmin.length > 0 || tab === "trebovanja" ? "white" : "#172554",
+                border: incomingForAdmin.length + readyForAdmin.length > 0 ? "2px solid #d96d00" : "1px solid transparent",
                 fontWeight: 1000,
               }}
             >
-              {readyForAdmin.length > 0 ? "📬" : "✉️"} Trebovanja
-              {readyForAdmin.length > 0 ? ` (${readyForAdmin.length})` : ""}
+              {incomingForAdmin.length + readyForAdmin.length > 0 ? "📬" : "✉️"} Trebovanja
+              {incomingForAdmin.length + readyForAdmin.length > 0 ? ` (${incomingForAdmin.length + readyForAdmin.length})` : ""}
             </button>
           </div>
         )}
@@ -1632,6 +1634,44 @@ async function saveImageAdjust() {
               <div style={{ fontSize: 13, fontWeight: 1000, color: "#c66000" }}>TREBOVANJE ZA</div>
               <div style={{ fontSize: 30, fontWeight: 1000, color: "#1c2f82" }}>{activeReq.location_name}</div>
               <div className="muted">Tražio: {activeReq.requested_by}</div>
+              <button className="btn" type="button" onClick={() => window.print()}
+                style={{marginTop:14,background:"#ef7d00",color:"white",fontSize:18,minHeight:52}}>
+                🖨 ŠTAMPAJ TREBOVANJE / SAČUVAJ PDF
+              </button>
+              <div className="muted" style={{marginTop:6}}>Štampanje ne potvrđuje pakovanje i ne knjiži robu.</div>
+            </section>
+            <section className="printOnly">
+              <div style={{textAlign:"center",marginBottom:20}}>
+                <h1 style={{margin:0}}>PILI — CENTRALNI MAGACIN</h1>
+                <h2 style={{margin:"8px 0"}}>TREBOVANJE — LISTA ZA ODVAJANJE ROBE</h2>
+              </div>
+              <div style={{marginBottom:16,lineHeight:1.65}}>
+                <div><b>Prodavnica:</b> {activeReq.location_name}</div>
+                <div><b>Trebuje:</b> {activeReq.requested_by}</div>
+                <div><b>Datum:</b> {new Date(activeReq.created_at).toLocaleString("sr-RS")}</div>
+                <div><b>Broj trebovanja:</b> {activeReq.id}</div>
+              </div>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead><tr>
+                  {(["R. br.","Šifra", "Naziv artikla", "Barkod", "Traženo", "JM", "Odvojeno"] as const).map(h => (
+                    <th key={h} style={{border:"1px solid #777",padding:7,textAlign:"left"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{(activeReq.lines || []).map((l, i) => (
+                  <tr key={`${l.article_id}-${i}`}>
+                    <td style={{border:"1px solid #aaa",padding:7}}>{i + 1}</td>
+                    <td style={{border:"1px solid #aaa",padding:7}}>{l.sifra}</td>
+                    <td style={{border:"1px solid #aaa",padding:7}}>{l.naziv}</td>
+                    <td style={{border:"1px solid #aaa",padding:7}}>{stock.find(a => a.article_id === l.article_id)?.barkod || "—"}</td>
+                    <td style={{border:"1px solid #aaa",padding:7,textAlign:"right",fontWeight:700}}>{qtyLabel(Number(l.qty))}</td>
+                    <td style={{border:"1px solid #aaa",padding:7}}>{l.jm}</td>
+                    <td style={{border:"1px solid #aaa",padding:7,minWidth:70}}>&nbsp;</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              <div style={{marginTop:25,fontSize:12}}>Robu odvojio: _____________________ &nbsp; Datum: __________</div>
+              <div style={{marginTop:16,fontSize:12}}>Šef magacina proverio: _____________________</div>
+              <p style={{fontSize:11,marginTop:14}}>Dokument za pripremu robe — nije potvrda knjiženja.</p>
             </section>
 
             <section className="banner">
@@ -2954,17 +2994,31 @@ async function saveImageAdjust() {
           <section className="banner screenOnly">
             <div className="row">
               <div className="grow">
-                <h2>Trebovanja za knjiženje</h2>
-                <p className="muted">Admin dobija trebovanje tek kada magacioner završi kontrolu i potvrdi da je roba spakovana.</p>
+                <h2>Trebovanja — prijem, štampa i knjiženje</h2>
+                <p className="muted">Novo trebovanje odmah stiže ovde. Štampaj spisak bez knjiženja, zatim šef magacina proverava robu u aplikaciji. Tek spakovano trebovanje može da se knjiži.</p>
               </div>
               <div style={{
                 minWidth: 92, minHeight: 72, borderRadius: 18, background:"#fff3e5",
                 color:"#a34d00", display:"grid", placeItems:"center", fontWeight:1000, fontSize:28
               }}>
-                {readyForAdmin.length}
+                {incomingForAdmin.length + readyForAdmin.length}
               </div>
             </div>
 
+            <h3 style={{marginTop:20,color:"#b45309"}}>🔔 NOVA TREBOVANJA — ZA ŠTAMPU ({incomingForAdmin.length})</h3>
+            <div className="cardList" style={{marginTop:12}}>
+              {incomingForAdmin.length === 0 && <p className="muted">Nema novih trebovanja za pripremu.</p>}
+              {incomingForAdmin.map((r) => (
+                <button key={r.id} onClick={() => openAdminRequest(r)}
+                  style={{width:"100%",border:"3px solid #ef7d00",background:"#fff8eb",borderRadius:18,padding:18,textAlign:"left",cursor:"pointer",color:"inherit"}}>
+                  <div style={{fontSize:12,fontWeight:1000,color:"#b45309"}}>🔔 {r.status === "NOVO" ? "NOVO TREBOVANJE" : "U PRIPREMI"} · ŠTAMPA BEZ KNJIŽENJA</div>
+                  <div style={{fontSize:24,fontWeight:1000,color:"#1c2f82"}}>{r.location_name}</div>
+                  <div className="muted">{r.requested_by} · {new Date(r.created_at).toLocaleString("sr-RS")} · {(r.lines||[]).length} stavki</div>
+                  <div style={{marginTop:10,fontWeight:900}}>🖨 OTVORI I ŠTAMPAJ ZA MAGACIONERA →</div>
+                </button>
+              ))}
+            </div>
+            <h3 style={{marginTop:22,color:"#16803a"}}>✓ ŠEF MAGACINA POTVRDIO — ZA KNJIŽENJE ({readyForAdmin.length})</h3>
             <div className="cardList" style={{marginTop:14}}>
               {readyForAdmin.length === 0 && <p className="muted">Nema novih spakovanih trebovanja za knjiženje.</p>}
               {readyForAdmin.map((r) => (
@@ -3045,13 +3099,13 @@ async function saveImageAdjust() {
                   </button>
                 )}
                 <button className="btn" style={{background:"#ef7d00",color:"white"}} onClick={printAdminRequest}>
-                  🖨 {adminReq.status === "POSLATO" ? "PROKNJIŽI / SAČUVAJ PDF" : "SAČUVAJ PDF"}
+                  🖨 ŠTAMPAJ ZA MAGACIONERA / PDF
                 </button>
               </div>
 
               <div className="tableWrap" style={{marginTop:16}}>
                 <table className="table">
-                  <thead><tr><th>Šifra</th><th>Artikal</th><th className="right">Količina</th><th>JM</th></tr></thead>
+                  <thead><tr><th>Šifra</th><th>Artikal</th><th className="right">Traženo / spakovano</th><th>JM</th></tr></thead>
                   <tbody>
                     {(adminReq.lines||[]).map((l:any) => (
                       <tr key={l.article_id}>
@@ -3077,7 +3131,7 @@ async function saveImageAdjust() {
               </div>
               <table style={{width:"100%",borderCollapse:"collapse"}}>
                 <thead>
-                  <tr><th style={{border:"1px solid #999",padding:8,textAlign:"left"}}>Šifra</th><th style={{border:"1px solid #999",padding:8,textAlign:"left"}}>Artikal</th><th style={{border:"1px solid #999",padding:8,textAlign:"right"}}>Količina</th><th style={{border:"1px solid #999",padding:8,textAlign:"left"}}>JM</th></tr>
+                  <tr><th style={{border:"1px solid #999",padding:8,textAlign:"left"}}>Šifra</th><th style={{border:"1px solid #999",padding:8,textAlign:"left"}}>Artikal</th><th style={{border:"1px solid #999",padding:8,textAlign:"right"}}>Količina</th><th style={{border:"1px solid #999",padding:8,textAlign:"left"}}>JM</th><th style={{border:"1px solid #999",padding:8}}>Odvojeno (upiši)</th></tr>
                 </thead>
                 <tbody>
                   {(adminReq.lines||[]).map((l:any) => (
@@ -3086,11 +3140,13 @@ async function saveImageAdjust() {
                       <td style={{border:"1px solid #bbb",padding:8}}>{l.naziv}</td>
                       <td style={{border:"1px solid #bbb",padding:8,textAlign:"right"}}>{qtyLabel(Number(l.qty))}</td>
                       <td style={{border:"1px solid #bbb",padding:8}}>{l.jm}</td>
+                      <td style={{border:"1px solid #bbb",padding:8,minWidth:85}}>&nbsp;</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div style={{marginTop:28,fontSize:12}}>Štampano iz PILI Centralni Magacin</div>
+              <div style={{marginTop:28,fontSize:12}}>Odvojio: ____________________ &nbsp;&nbsp; Proverio šef magacina: ____________________</div>
+              <div style={{marginTop:12,fontSize:12}}>Ovaj papir nije knjiženje. Stanje se menja samo potvrdom u aplikaciji.</div>
             </section>
           </>
         )}

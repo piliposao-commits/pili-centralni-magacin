@@ -1,5 +1,5 @@
 const REQUEST_LEDGER_START = Date.parse("2026-09-25T09:24:08.834Z");
-const BOOKED_REQUEST_STATUSES = new Set(["POSLATO", "PRIMLJENO", "ZAVRSENO"]);
+const BOOKED_REQUEST_STATUSES = new Set(["PRIMLJENO", "ZAVRSENO"]);
 
 export type StockLedger = {
   inboundMap: Map<string, number>;
@@ -45,8 +45,7 @@ export async function reconcileCentralStock(admin: any, centralId: string): Prom
 
     // ISPRAVNO PRAVILO:
     // Trebovanje NE skida stanje kada ga radnja pošalje.
-    // Stanje se umanjuje tek kada MAGACIONER potvrdi da je roba spakovana/odložena,
-    // odnosno kada trebovanje dobije status POSLATO (ili kasnije PRIMLJENO/ZAVRSENO).
+    // Stanje se umanjuje tek kada ADMIN proknjiži POSLATO trebovanje (PRIMLJENO).
     if (
       type === "TREBOVANJE" &&
       new Date(d?.created_at || 0).getTime() >= REQUEST_LEDGER_START &&
