@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { admin, requireSession } from "@/lib/server";
+import { reconcileCentralStock } from "@/lib/centralStock";
 
 export async function GET(req: Request) {
   try {
@@ -9,6 +10,18 @@ export async function GET(req: Request) {
     if (!articleId) {
       return NextResponse.json({ ok: false, message: "Nedostaje artikal." }, { status: 400 });
     }
+
+    const { data: central, error: centralErr } = await admin
+      .from("cm_locations")
+      .select("id")
+      .eq("type", "CENTRAL")
+      .limit(1)
+      .single();
+    if (centralErr || !central?.id) throw centralErr || new Error("Centralni magacin nije pronađen.");
+
+    // Svako otvaranje istorije prvo poravna stanje sa kompletnom knjigom kretanja.
+    // Tako broj na vrhu ne može da ostane star (npr. +8 ulaz, -8 izlaz, a stanje 8).
+    const ledger = await reconcileCentralStock(admin, String(central.id));
 
     const [{ data: article, error: articleErr }, { data: lines, error: linesErr }] = await Promise.all([
       admin.from("cm_articles").select("id,sifra,naziv,barkod,jm").eq("id", articleId).single(),
@@ -103,7 +116,7 @@ export async function GET(req: Request) {
 
     events.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    return NextResponse.json({ ok: true, article, events });
+    return NextResponse.json({ ok: true, article, events, current_qty: Number(ledger.calculatedMap.get(articleId) || 0) });
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, message: e?.message || "Greška pri učitavanju istorije." },

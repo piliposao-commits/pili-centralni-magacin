@@ -126,12 +126,14 @@ function CalculationPageCard({
   canAddMore,
   onAdd,
   onRemove,
+  onReplace,
 }: {
   file: File;
   index: number;
   canAddMore: boolean;
   onAdd: (file?: File | null) => void;
   onRemove: () => void;
+  onReplace: (file?: File | null) => void;
 }) {
   const [previewUrl, setPreviewUrl] = useState("");
 
@@ -181,6 +183,39 @@ function CalculationPageCard({
       >
         Strana {index + 1}
       </div>
+
+      <label
+        aria-label={`Promeni stranu ${index + 1}`}
+        title="Promeni ovu sliku"
+        style={{
+          position: "absolute",
+          right: 60,
+          top: 10,
+          minHeight: 42,
+          borderRadius: 999,
+          border: "2px solid white",
+          background: "rgba(239,125,0,.94)",
+          color: "white",
+          padding: "0 12px",
+          display: "flex",
+          alignItems: "center",
+          fontSize: 12,
+          fontWeight: 1000,
+          cursor: "pointer",
+        }}
+      >
+        ↻ PROMENI
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            onReplace(e.currentTarget.files?.[0]);
+            e.currentTarget.value = "";
+          }}
+        />
+      </label>
 
       <button
         type="button"
@@ -671,6 +706,9 @@ async function saveImageAdjust() {
       const r = await fetch(`/api/article-history?article_id=${encodeURIComponent(article.article_id)}`, { cache: "no-store" });
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.message || "Greška pri učitavanju istorije.");
+      const currentQty = Number(j.current_qty ?? article.stanje ?? 0);
+      setHistoryArticle((prev) => prev ? { ...prev, stanje: currentQty } : prev);
+      setStock((prev) => prev.map((x) => x.article_id === article.article_id ? { ...x, stanje: currentQty } : x));
       setArticleHistory({ article: j.article, events: j.events || [] });
     } catch (e: any) {
       setMsg(e?.message || "Greška pri učitavanju istorije artikla.");
@@ -974,6 +1012,18 @@ async function saveImageAdjust() {
     setScan(null);
     setCalculationUnlocked(false);
     setScanFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function replaceScanFile(index: number, file?: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setMsg("Možeš izabrati samo fotografiju kalkulacije.");
+      return;
+    }
+    setMsg("");
+    setScan(null);
+    setCalculationUnlocked(false);
+    setScanFiles((prev) => prev.map((current, i) => (i === index ? file : current)));
   }
 
   function clearCalculationPhotos() {
@@ -2224,7 +2274,7 @@ async function saveImageAdjust() {
                     IZABRANO: {scanFiles.length} {scanFiles.length === 1 ? "STRANA" : "STRANE"}
                   </div>
                   <div style={{ color: "#65708a", fontSize: 14, marginTop: 5 }}>
-                    Sve strane će biti spojene u jednu kalkulaciju. Možeš dodati još preko narandžastog <b>+</b>.
+                    Sve strane će biti spojene u jednu kalkulaciju. Ako pogrešiš sliku, klikni <b>↻ PROMENI</b> na toj strani. Možeš dodati još preko narandžastog <b>+</b>.
                   </div>
 
                   <div
@@ -2262,6 +2312,7 @@ async function saveImageAdjust() {
                         canAddMore={index === scanFiles.length - 1 && scanFiles.length < 8}
                         onAdd={addScanFile}
                         onRemove={() => removeScanFile(index)}
+                        onReplace={(file) => replaceScanFile(index, file)}
                       />
                     ))}
                   </div>
@@ -2880,46 +2931,34 @@ async function saveImageAdjust() {
                               PODESI SLIKU
                             </button>
                           )}
-                          <>
-                            <label
-                              style={{
-                                cursor: "pointer",
-                                fontWeight: 1000,
-                                color: s.image_url ? "#ef7d00" : "#1c2f82",
-                                fontSize: 12,
-                              }}
-                            >
-                              {pendingArticleImages[s.article_id]
-                                ? "✓ NOVA SLIKA IZABRANA"
-                                : s.image_url
-                                  ? "↻ PROMENI SLIKU"
-                                  : "DODAJ SLIKU"}
-                              <input
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                style={{ display: "none" }}
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (!file) return;
-                                  setPendingArticleImages((prev) => ({ ...prev, [s.article_id]: file }));
-                                  setArticleImage(articleImageKey(s), file);
-                                  e.currentTarget.value = "";
-                                }}
-                              />
-                            </label>
-                            {pendingArticleImages[s.article_id] && (
+                          {s.image_url ? null : (
+                            <>
+                              <label style={{ cursor: "pointer", fontWeight: 900, color: "#1c2f82", fontSize: 12 }}>
+                                {pendingArticleImages[s.article_id] ? "✓ SLIKA IZABRANA" : "DODAJ SLIKU"}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  style={{ display: "none" }}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    setPendingArticleImages((prev) => ({ ...prev, [s.article_id]: file }));
+                                    setArticleImage(articleImageKey(s), file);
+                                  }}
+                                />
+                              </label>
                               <button
                                 type="button"
                                 className="btn"
-                                disabled={savingArticleImage === s.article_id}
+                                disabled={!pendingArticleImages[s.article_id] || savingArticleImage === s.article_id}
                                 onClick={() => saveArticleImage(s)}
                                 style={{ width: "100%", background: "#ef7d00", color: "white", minHeight: 34, fontSize: 11 }}
                               >
-                                {savingArticleImage === s.article_id ? "ČUVAM..." : s.image_url ? "SAČUVAJ NOVU SLIKU" : "SAČUVAJ SLIKU"}
+                                {savingArticleImage === s.article_id ? "ČUVAM..." : "SAČUVAJ SLIKU"}
                               </button>
-                            )}
-                          </>
+                            </>
+                          )}
                         </div>
                       </td>
                       <td>{s.sifra}</td>

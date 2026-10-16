@@ -1,0 +1,11 @@
+STANJE FIX 16-10-2026
+
+Pravilo:
+- ZAVRSEN ULAZ u centralni magacin = PLUS
+- TREBOVANJE status POSLATO / PRIMLJENO / ZAVRSENO = MINUS
+- DIREKTAN PRENOS = MINUS
+- Ako za isto izdavanje postoje i TREBOVANJE i PRENOS, ne oduzima se dvaput.
+- Otvaranje istorije artikla ponovo poravnava cm_stock iz knjige kretanja.
+
+Primer iz prijavljene greske:
+ULAZ +8, PILI BOLJEVCI -4, PILI PLUS -4 => TRENUTNO STANJE 0 KOM.
