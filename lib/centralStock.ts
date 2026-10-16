@@ -40,13 +40,11 @@ export async function reconcileCentralStock(admin: any, centralId: string): Prom
       }
     }
 
-    // STVARNI IZLAZ IZ CENTRALNOG MAGACINA JE PRENOS.
-    // Ovo pokriva i direktan izlaz robe i prenos nastao iz trebovanja.
-    // TREBOVANJE je zahtev i ne sme se sabirati zajedno sa PRENOSOM jer bi se ista
-    // roba oduzela dva puta. PRENOS je jedini dokument koji predstavlja fizički izlaz.
+    // Svaki stvarno kreiran PRENOS iz CENTRALNOG MAGACINA predstavlja fizički izlaz.
+    // Ne oslanjamo se na status: ako PRENOS postoji i ima stavke, roba je izašla.
+    // TREBOVANJE je samo zahtev i ne sme se dodatno oduzimati jer bi nastalo duplo skidanje.
     if (
       type === "PRENOS" &&
-      ["POSLATO", "PRIMLJENO", "ZAVRSENO"].includes(status) &&
       String(d?.source_location_id || "") === String(centralId)
     ) {
       for (const line of lines) {
