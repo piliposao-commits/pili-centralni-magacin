@@ -1,0 +1,6 @@
+PILI CENTRALNI MAGACIN — ŠTAMPA KOD MAGACIONERA
+
+Uloguj se kao magacioner > Trebovanja > otvori prodavnicu > ŠTAMPAJ TREBOVANJE / SAČUVAJ PDF.
+Dobija se papir sa šifrom, nazivom, barkodom, traženom količinom i praznom kolonom Odvojeno.
+Štampanje ne potvrđuje pakovanje i ne knjiži robu. Šef magacina i dalje radi kontrolu u aplikaciji.
+Nije potreban dodatni SQL.

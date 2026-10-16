@@ -1,0 +1,27 @@
+PILI CENTRALNI MAGACIN — NOVI TOK TREBOVANJA
+
+1. Prodavnica pošalje trebovanje: Admin odmah vidi NOVO (notifikacija dok je aplikacija otvorena).
+2. Admin otvori trebovanje i klikne STAMPAJ ZA MAGACIONERA / PDF.
+   Štampanje NE knjiži robu i NE menja status trebovanja.
+   Na papiru su tražene količine i prazna kolona za odvojenu količinu.
+3. Magacioner odvaja robu po papiru.
+4. Šef magacina, prijavljen postojećom ulogom MAGACIONER, unosi stvarne količine i čekira.
+5. Status POSLATO označava kontrolisano/spakovano, ali se obračun centralnog stanja
+   vrši tek kada ADMIN klikne PROKNJIZI i nastane PRIMLJENO.
+
+VAŽNO: U prethodnoj verziji POSLATO je ulazilo u obračun izlaza; zato PRE objavljivanja
+ove izmene obavezno proveriti sva postojeća POSLATO trebovanja, jer promena
+obračuna može privremeno vratiti njihove količine na raspoloživo stanje sve dok se ne knjiže.
+Preporuka: prvo proknjižiti sve stare POSLATO zahteve pa objaviti novu verziju.
+
+INSTALACIJA:
+- Raspakuj ZIP preko postojećeg foldera pili-centralni-magacin.
+- Sačuvaj postojeći .env.local i .vercel (nisu uključeni u ovaj ZIP).
+- npm install
+- npm run build
+- vercel --prod
+
+NOTIFIKACIJE: Browser mora biti otvoren; za obaveštenja kada je zatvoren
+potreban je zaseban Web Push servis.
+
+Nije potrebno pokretati novi SQL za ove izmene.

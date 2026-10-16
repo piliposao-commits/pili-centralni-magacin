@@ -1,6 +1,3 @@
-const REQUEST_LEDGER_START = Date.parse("2026-09-25T09:24:08.834Z");
-const BOOKED_REQUEST_STATUSES = new Set(["PRIMLJENO", "ZAVRSENO"]);
-
 export type StockLedger = {
   inboundMap: Map<string, number>;
   outboundMap: Map<string, number>;
@@ -12,7 +9,7 @@ export async function reconcileCentralStock(admin: any, centralId: string): Prom
     admin
       .from("cm_documents")
       .select("id,type,status,source_location_id,destination_location_id,document_no,supplier,created_at,cm_document_lines(article_id,qty)")
-      .in("type", ["ULAZ", "TREBOVANJE"]),
+      .in("type", ["ULAZ", "PRENOS"]),
     admin.from("cm_articles").select("id").eq("active", true),
   ]);
 
@@ -43,13 +40,14 @@ export async function reconcileCentralStock(admin: any, centralId: string): Prom
       }
     }
 
-    // ISPRAVNO PRAVILO:
-    // Trebovanje NE skida stanje kada ga radnja pošalje.
-    // Stanje se umanjuje tek kada ADMIN proknjiži POSLATO trebovanje (PRIMLJENO).
+    // STVARNI IZLAZ IZ CENTRALNOG MAGACINA JE PRENOS.
+    // Ovo pokriva i direktan izlaz robe i prenos nastao iz trebovanja.
+    // TREBOVANJE je zahtev i ne sme se sabirati zajedno sa PRENOSOM jer bi se ista
+    // roba oduzela dva puta. PRENOS je jedini dokument koji predstavlja fizički izlaz.
     if (
-      type === "TREBOVANJE" &&
-      new Date(d?.created_at || 0).getTime() >= REQUEST_LEDGER_START &&
-      BOOKED_REQUEST_STATUSES.has(status)
+      type === "PRENOS" &&
+      ["POSLATO", "PRIMLJENO", "ZAVRSENO"].includes(status) &&
+      String(d?.source_location_id || "") === String(centralId)
     ) {
       for (const line of lines) {
         const id = String(line?.article_id || "");

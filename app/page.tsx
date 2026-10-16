@@ -126,12 +126,14 @@ function CalculationPageCard({
   canAddMore,
   onAdd,
   onRemove,
+  onReplace,
 }: {
   file: File;
   index: number;
   canAddMore: boolean;
   onAdd: (file?: File | null) => void;
   onRemove: () => void;
+  onReplace: (file?: File | null) => void;
 }) {
   const [previewUrl, setPreviewUrl] = useState("");
 
@@ -181,6 +183,39 @@ function CalculationPageCard({
       >
         Strana {index + 1}
       </div>
+
+      <label
+        aria-label={`Promeni stranu ${index + 1}`}
+        title="Promeni ovu sliku"
+        style={{
+          position: "absolute",
+          right: 60,
+          top: 10,
+          minHeight: 42,
+          borderRadius: 999,
+          border: "2px solid white",
+          background: "rgba(239,125,0,.94)",
+          color: "white",
+          padding: "0 12px",
+          display: "flex",
+          alignItems: "center",
+          fontSize: 12,
+          fontWeight: 1000,
+          cursor: "pointer",
+        }}
+      >
+        ↻ PROMENI
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            onReplace(e.currentTarget.files?.[0]);
+            e.currentTarget.value = "";
+          }}
+        />
+      </label>
 
       <button
         type="button"
@@ -974,6 +1009,18 @@ async function saveImageAdjust() {
     setScan(null);
     setCalculationUnlocked(false);
     setScanFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function replaceScanFile(index: number, file?: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setMsg("Možeš izabrati samo fotografiju kalkulacije.");
+      return;
+    }
+    setMsg("");
+    setScan(null);
+    setCalculationUnlocked(false);
+    setScanFiles((prev) => prev.map((current, i) => (i === index ? file : current)));
   }
 
   function clearCalculationPhotos() {
@@ -2224,7 +2271,7 @@ async function saveImageAdjust() {
                     IZABRANO: {scanFiles.length} {scanFiles.length === 1 ? "STRANA" : "STRANE"}
                   </div>
                   <div style={{ color: "#65708a", fontSize: 14, marginTop: 5 }}>
-                    Sve strane će biti spojene u jednu kalkulaciju. Možeš dodati još preko narandžastog <b>+</b>.
+                    Sve strane će biti spojene u jednu kalkulaciju. Ako pogrešiš sliku, klikni <b>↻ PROMENI</b> na toj strani. Možeš dodati još preko narandžastog <b>+</b>.
                   </div>
 
                   <div
@@ -2262,6 +2309,7 @@ async function saveImageAdjust() {
                         canAddMore={index === scanFiles.length - 1 && scanFiles.length < 8}
                         onAdd={addScanFile}
                         onRemove={() => removeScanFile(index)}
+                        onReplace={(file) => replaceScanFile(index, file)}
                       />
                     ))}
                   </div>
