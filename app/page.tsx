@@ -2932,10 +2932,25 @@ async function saveImageAdjust() {
                             </button>
                           )}
                           <>
-                            <label style={{ cursor: "pointer", fontWeight: 900, color: "#1c2f82", fontSize: 12 }}>
+                            <label
+                              className="btn"
+                              style={{
+                                cursor: "pointer",
+                                fontWeight: 1000,
+                                width: "100%",
+                                background: pendingArticleImages[s.article_id] ? "#14833b" : "#ef7d00",
+                                color: "white",
+                                minHeight: 32,
+                                fontSize: 10,
+                                padding: "7px 8px",
+                                display: "grid",
+                                placeItems: "center",
+                                textAlign: "center",
+                              }}
+                            >
                               {pendingArticleImages[s.article_id]
                                 ? "✓ NOVA SLIKA IZABRANA"
-                                : (s.image_url || images[articleImageKey(s)] ? "PROMENI SLIKU" : "DODAJ SLIKU")}
+                                : (s.image_url || images[articleImageKey(s)] ? "↻ PROMENI SLIKU" : "+ DODAJ SLIKU")}
                               <input
                                 type="file"
                                 accept="image/*"
