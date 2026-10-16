@@ -46,17 +46,14 @@ export async function POST(req: Request) {
     if (!article) return NextResponse.json({ ok: false, message: "Artikal ne postoji." }, { status: 404 });
 
     await ensureBucket();
-    const { data: existing, error: listError } = await admin.storage.from(BUCKET).list("", { limit: 1000, search: articleId });
-    if (listError) throw listError;
-    if ((existing || []).some((x: any) => x.name === articleId)) {
-      return NextResponse.json({ ok: false, message: "Slika je već sačuvana za ovaj artikal." }, { status: 409 });
-    }
 
+    // Isti articleId je namerno ista putanja: nova slika zamenjuje staru.
+    // Upsert omogućava korisniku da ispravi pogrešno unetu fotografiju bez brisanja artikla.
     const bytes = new Uint8Array(await file.arrayBuffer());
     const { error: uploadError } = await admin.storage.from(BUCKET).upload(articleId, bytes, {
       contentType: file.type || "image/jpeg",
-      cacheControl: "31536000",
-      upsert: false,
+      cacheControl: "0",
+      upsert: true,
     });
     if (uploadError) throw uploadError;
 

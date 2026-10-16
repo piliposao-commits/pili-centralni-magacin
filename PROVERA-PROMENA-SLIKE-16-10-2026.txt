@@ -1,0 +1,10 @@
+PROMENA SLIKE ARTIKLA - 16.10.2026
+
+Izmena je ogranicena na sliku artikla:
+- artikal sa postojecom slikom sada ima opciju PROMENI SLIKU
+- nakon izbora nove slike pojavljuje se SACUVAJ NOVU SLIKU
+- nova slika zamenjuje staru u Supabase Storage
+- dodat je cache-busting da se odmah prikaze nova slika, a ne stara iz browser cache-a
+
+Postojeca logika stanja iz STANJE-0-FIX verzije nije menjana.
+TypeScript provera: PROSLA.

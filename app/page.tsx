@@ -825,7 +825,7 @@ async function saveImageAdjust() {
       const j = await r.json();
       if (!r.ok || !j?.ok) throw new Error(j?.message || "Greška pri čuvanju slike.");
       setPendingArticleImages((prev) => { const n = { ...prev }; delete n[article.article_id]; return n; });
-      setMsg("✓ Slika je sačuvana i zaključana za ovaj artikal.");
+      setMsg("✓ Slika artikla je sačuvana. Možeš je ponovo promeniti kad god želiš.");
       await load();
     } catch (e: any) {
       const poruka = e?.message || "Greška pri čuvanju slike.";
@@ -2931,34 +2931,39 @@ async function saveImageAdjust() {
                               PODESI SLIKU
                             </button>
                           )}
-                          {s.image_url ? null : (
-                            <>
-                              <label style={{ cursor: "pointer", fontWeight: 900, color: "#1c2f82", fontSize: 12 }}>
-                                {pendingArticleImages[s.article_id] ? "✓ SLIKA IZABRANA" : "DODAJ SLIKU"}
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  capture="environment"
-                                  style={{ display: "none" }}
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (!file) return;
-                                    setPendingArticleImages((prev) => ({ ...prev, [s.article_id]: file }));
-                                    setArticleImage(articleImageKey(s), file);
-                                  }}
-                                />
-                              </label>
+                          <>
+                            <label style={{ cursor: "pointer", fontWeight: 900, color: "#1c2f82", fontSize: 12 }}>
+                              {pendingArticleImages[s.article_id]
+                                ? "✓ NOVA SLIKA IZABRANA"
+                                : (s.image_url || images[articleImageKey(s)] ? "PROMENI SLIKU" : "DODAJ SLIKU")}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                style={{ display: "none" }}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  setPendingArticleImages((prev) => ({ ...prev, [s.article_id]: file }));
+                                  setArticleImage(articleImageKey(s), file);
+                                  e.currentTarget.value = "";
+                                }}
+                              />
+                            </label>
+                            {pendingArticleImages[s.article_id] && (
                               <button
                                 type="button"
                                 className="btn"
-                                disabled={!pendingArticleImages[s.article_id] || savingArticleImage === s.article_id}
+                                disabled={savingArticleImage === s.article_id}
                                 onClick={() => saveArticleImage(s)}
                                 style={{ width: "100%", background: "#ef7d00", color: "white", minHeight: 34, fontSize: 11 }}
                               >
-                                {savingArticleImage === s.article_id ? "ČUVAM..." : "SAČUVAJ SLIKU"}
+                                {savingArticleImage === s.article_id
+                                  ? "ČUVAM..."
+                                  : (s.image_url || images[articleImageKey(s)] ? "SAČUVAJ NOVU SLIKU" : "SAČUVAJ SLIKU")}
                               </button>
-                            </>
-                          )}
+                            )}
+                          </>
                         </div>
                       </td>
                       <td>{s.sifra}</td>

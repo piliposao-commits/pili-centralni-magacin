@@ -15,7 +15,8 @@ async function articleImageMap() {
     for (const f of files || []) {
       if (!f?.name) continue;
       const { data } = admin.storage.from(BUCKET).getPublicUrl(f.name);
-      m.set(f.name, data.publicUrl);
+      const version = encodeURIComponent(String((f as any).updated_at || (f as any).created_at || Date.now()));
+      m.set(f.name, `${data.publicUrl}?v=${version}`);
     }
     return m;
   } catch {
