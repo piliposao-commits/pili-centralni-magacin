@@ -7,63 +7,40 @@ export async function POST(req: Request) {
     const b = await req.json();
     const session = await requireSession();
 
-    if (b.action === "archive") {
-      if (session.role !== "ADMIN") {
-        return NextResponse.json({ ok: false, message: "Samo admin može da arhivira trebovanje." }, { status: 403 });
-      }
-
-      const requestId = String(b.request_id || "");
-      if (!requestId) {
-        return NextResponse.json({ ok: false, message: "Nedostaje ID trebovanja." }, { status: 400 });
-      }
-
-      const { data: doc, error: docErr } = await admin
-        .from("cm_documents")
-        .select("id,status,type")
-        .eq("id", requestId)
-        .eq("type", "TREBOVANJE")
-        .single();
-      if (docErr) throw docErr;
-
-      const currentStatus = String(doc?.status || "").toUpperCase();
-      if (!["NOVO", "U PRIPREMI"].includes(currentStatus)) {
-        return NextResponse.json({
-          ok: false,
-          message: "Arhiviranje je dozvoljeno samo za staro NOVO/U PRIPREMI trebovanje. Spakovano ili proknjiženo trebovanje se ne arhivira ovim dugmetom.",
-        }, { status: 400 });
-      }
-
-      const { error } = await admin
-        .from("cm_documents")
-        .update({ status: "ARHIVIRANO", updated_at: new Date().toISOString() })
-        .eq("id", requestId)
-        .eq("type", "TREBOVANJE");
-      if (error) throw error;
-
-      // ARHIVIRANO je samo administrativno sklanjanje stare stavke sa aktivne liste.
-      // Ne pravi PRENOS, ne knjiži robu i ne poziva reconcileCentralStock.
-      return NextResponse.json({ ok: true, status: "ARHIVIRANO" });
-    }
-
     if (b.action === "status") {
       const targetStatus = String(b.status || "").toUpperCase();
 
       if (session.role === "MAGACIONER" && !["U PRIPREMI", "POSLATO"].includes(targetStatus)) {
         return NextResponse.json({ ok: false, message: "Magacioner ne može da postavi taj status." }, { status: 403 });
       }
-      if (session.role === "ADMIN" && targetStatus !== "PRIMLJENO") {
-        return NextResponse.json({ ok: false, message: "Admin može samo da proknjiži trebovanje." }, { status: 403 });
+      if (session.role === "ADMIN" && !["PRIMLJENO", "ZAVRSENO"].includes(targetStatus)) {
+        return NextResponse.json({ ok: false, message: "Admin može da proknjiži ili arhivira trebovanje." }, { status: 403 });
       }
       if (session.role !== "ADMIN" && session.role !== "MAGACIONER") {
         return NextResponse.json({ ok: false, message: "Nedozvoljen pristup." }, { status: 403 });
       }
 
-      const { data, error } = await admin.rpc("cm_set_request_status", {
-        p_request_id: b.request_id,
-        p_status: targetStatus,
-        p_user_id: session.id,
-      });
-      if (error) throw error;
+      let data: any = null;
+      if (targetStatus === "ZAVRSENO") {
+        const { data: archived, error } = await admin
+          .from("cm_documents")
+          .update({ status: "ZAVRSENO", updated_at: new Date().toISOString(), created_by: session.id })
+          .eq("id", b.request_id)
+          .eq("type", "TREBOVANJE")
+          .eq("status", "PRIMLJENO")
+          .select("id,status")
+          .single();
+        if (error) throw error;
+        data = archived;
+      } else {
+        const { data: changed, error } = await admin.rpc("cm_set_request_status", {
+          p_request_id: b.request_id,
+          p_status: targetStatus,
+          p_user_id: session.id,
+        });
+        if (error) throw error;
+        data = changed;
+      }
       if (targetStatus === "PRIMLJENO") {
         const { data: central, error: centralErr } = await admin.from("cm_locations")
           .select("id").eq("type", "CENTRAL").limit(1).single();

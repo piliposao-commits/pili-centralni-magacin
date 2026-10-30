@@ -664,26 +664,17 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     if (printAfter) window.setTimeout(() => window.print(), 120);
   }
 
-  function printAdminRequest() {
-    // Štampa NIKADA ne menja status niti knjiži robu.
-    window.print();
-  }
-
   async function archiveAdminRequest() {
     if (!adminReq) return;
-    if (!["NOVO", "U PRIPREMI"].includes(String(adminReq.status || "").toUpperCase())) {
-      setMsg("Možeš da arhiviraš samo staro NOVO ili U PRIPREMI trebovanje.");
+    if (adminReq.status !== "PRIMLJENO") {
+      setMsg("Samo već proknjiženo trebovanje može da se arhivira.");
       return;
     }
-    const ok = window.confirm(
-      `Arhivirati trebovanje za ${adminReq.location_name}?\n\nOvo ga samo sklanja sa aktivne liste. Ne knjiži robu i ne menja stanje.`
-    );
-    if (!ok) return;
 
     const res = await fetch("/api/request", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "archive", request_id: adminReq.id }),
+      body: JSON.stringify({ action: "status", request_id: adminReq.id, status: "ZAVRSENO" }),
     });
     const j = await res.json();
     if (!res.ok || !j.ok) {
@@ -691,10 +682,15 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
       return;
     }
 
-    const updated = { ...adminReq, status: "ARHIVIRANO" };
+    const updated = { ...adminReq, status: "ZAVRSENO" };
     setRequests((prev) => prev.map((x) => x.id === updated.id ? updated : x));
     setAdminReq(null);
-    setMsg("✓ Trebovanje je arhivirano i sklonjeno sa aktivne liste. Stanje nije menjano.");
+    setMsg("✓ Trebovanje je arhivirano. Stanje robe nije promenjeno.");
+  }
+
+  function printAdminRequest() {
+    // Štampa NIKADA ne menja status niti knjiži robu.
+    window.print();
   }
 
 
@@ -1360,7 +1356,7 @@ async function saveImageAdjust() {
   const incomingForAdmin = requests.filter((r) => r.status === "NOVO" || r.status === "U PRIPREMI");
   const readyForAdmin = requests.filter((r) => r.status === "POSLATO");
   const bookedRequests = requests.filter((r) => r.status === "PRIMLJENO");
-  const archivedRequests = requests.filter((r) => r.status === "ARHIVIRANO");
+  const archivedRequests = requests.filter((r) => r.status === "ZAVRSENO");
 
   return (
     <main className="page">
@@ -3258,19 +3254,14 @@ async function saveImageAdjust() {
 
             {archivedRequests.length > 0 && (
               <details style={{marginTop:10}}>
-                <summary style={{
-                  cursor:"pointer", color:"#9ca3af", fontSize:12, fontWeight:900, userSelect:"none"
-                }}>
-                  Arhivirana trebovanja ({archivedRequests.length})
+                <summary style={{cursor:"pointer",color:"#6b7280",fontSize:12,fontWeight:900,userSelect:"none"}}>
+                  🗄 Arhivirana trebovanja ({archivedRequests.length})
                 </summary>
                 <div style={{display:"grid", gap:6, marginTop:8}}>
                   {archivedRequests.slice(0, 50).map((r) => (
-                    <div key={r.id} style={{
-                      width:"100%", border:"1px dashed #d1d5db", background:"#fafafa",
-                      borderRadius:9, padding:"8px 10px", color:"#9ca3af", fontSize:12
-                    }}>
-                      <b>{r.location_name}</b> · {new Date(r.created_at).toLocaleString("sr-RS")} · ARHIVIRANO
-                    </div>
+                    <button key={r.id} onClick={() => openAdminRequest(r)} style={{width:"100%",border:"1px solid #d1d5db",background:"#f9fafb",borderRadius:9,padding:"8px 10px",textAlign:"left",cursor:"pointer",color:"#6b7280",fontSize:12}}>
+                      <b style={{color:"#4b5563"}}>{r.location_name}</b> · {new Date(r.created_at).toLocaleString("sr-RS")} · <span style={{fontWeight:900}}>ARHIVIRANO</span>
+                    </button>
                   ))}
                 </div>
               </details>
@@ -3294,14 +3285,14 @@ async function saveImageAdjust() {
                     ✓ PROKNJIŽI
                   </button>
                 )}
-                {["NOVO", "U PRIPREMI"].includes(String(adminReq.status || "").toUpperCase()) && (
-                  <button className="btn" style={{background:"#6b7280",color:"white"}} onClick={archiveAdminRequest}>
-                    🗄 ARHIVIRAJ ODRAĐENO
-                  </button>
-                )}
                 <button className="btn" style={{background:"#ef7d00",color:"white"}} onClick={printAdminRequest}>
                   🖨 ŠTAMPAJ ZA MAGACIONERA / PDF
                 </button>
+                {adminReq.status === "PRIMLJENO" && (
+                  <button className="btn" style={{background:"#4b5563",color:"white"}} onClick={archiveAdminRequest}>
+                    🗄 ARHIVIRAJ TREBOVANJE
+                  </button>
+                )}
               </div>
 
               <div className="tableWrap" style={{marginTop:16}}>
