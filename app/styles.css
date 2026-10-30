@@ -94,7 +94,7 @@
   border:2px solid #f58200 !important;
   background:#fff7ed !important;
   color:#f58200 !important;
-  font-size:17px !important;
+  font-size:13px !important;
   font-weight:1000 !important;
   text-align:center !important;
   padding:10px 8px !important;
@@ -104,6 +104,7 @@
   color:#f58200 !important;
   opacity:1 !important;
   font-weight:900 !important;
+  font-size:12px !important;
 }
 @media(max-width:640px){
   .trebGrid{
@@ -144,8 +145,11 @@
   }
   .trebQtyInput{
     min-height:38px !important;
-    font-size:14px !important;
-    padding:8px 6px !important;
+    font-size:11px !important;
+    padding:8px 5px !important;
+  }
+  .trebQtyInput::placeholder{
+    font-size:10px !important;
   }
 }
 
