@@ -22,6 +22,7 @@ type Stock = {
   image_zoom?: number;
   image_x?: number;
   image_y?: number;
+  transportno_pakovanje?: number | null;
 };
 
 const articleImageKey = (x: { sifra?: string; barkod?: string | null; article_id?: string }) =>
@@ -29,6 +30,14 @@ const articleImageKey = (x: { sifra?: string; barkod?: string | null; article_id
 
 const n = (v: number) =>
   Number(v || 0).toLocaleString("sr-RS", { maximumFractionDigits: 3 });
+
+
+const kutijeLabel = (qty: number, pakovanje?: number | null) => {
+  const p = Number(pakovanje || 0);
+  if (p <= 0) return "";
+  const boxes = Number(qty || 0) / p;
+  return `${boxes.toLocaleString("sr-RS", { maximumFractionDigits: 2 })} kutija`;
+};
 
 function splitArticleTitle(naziv: string) {
   const clean = (naziv || "").trim();
@@ -62,6 +71,7 @@ export default function TrebovanjePage() {
   const [login, setLogin] = useState({ username: "", password: "" });
   const [q, setQ] = useState("");
   const [qty, setQty] = useState<Record<string, number>>({});
+  const [boxQty, setBoxQty] = useState<Record<string, number>>({});
   const [review, setReview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -198,6 +208,7 @@ export default function TrebovanjePage() {
     setLocation(null);
     setStock([]);
     setQty({});
+    setBoxQty({});
     setReview(false);
   }
 
@@ -235,6 +246,7 @@ export default function TrebovanjePage() {
       const j = await r.json();
       if (!r.ok || !j.ok) return setMsg(j.message || "Greška pri slanju trebovanja.");
       setQty({});
+      setBoxQty({});
       setReview(false);
       setMsg(`Trebovanje je poslato centralnom magacinu — ${j.location}.`);
       await load();
@@ -349,6 +361,11 @@ export default function TrebovanjePage() {
                   </div>
                   <div style={{ fontWeight: 1000, fontSize: 22, color: "#1c2f82" }}>
                     {n(x.trazeno)} {x.jm}
+                    {Number(x.transportno_pakovanje || 0) > 0 && (
+                      <small style={{ display: "block", fontSize: 12, color: "#ef7d00", marginTop: 3 }}>
+                        {kutijeLabel(x.trazeno, x.transportno_pakovanje)} · {x.transportno_pakovanje} kom/kutija
+                      </small>
+                    )}
                   </div>
                 </div>
               ))}
@@ -488,9 +505,15 @@ export default function TrebovanjePage() {
                   <div className="trebStock">
                     <span className="trebStockLabel">STANJE</span>
                     <span className="trebStockValue">{n(x.stanje)} {x.jm}</span>
+                    {Number(x.transportno_pakovanje || 0) > 0 && (
+                      <small style={{ display: "block", color: "#1c2f82", fontWeight: 900, marginTop: 2 }}>
+                        {kutijeLabel(x.stanje, x.transportno_pakovanje)} · {x.transportno_pakovanje} kom/kutija
+                      </small>
+                    )}
                   </div>
 
                   <div className="field trebQtyField" style={{ marginBottom: 0 }}>
+                    <label style={{fontSize:11,fontWeight:1000,color:"#1c2f82"}}>KOMADA</label>
                     <input
                       type="number"
                       min="0"
@@ -498,11 +521,51 @@ export default function TrebovanjePage() {
                       inputMode="numeric"
                       placeholder="npr. 30 kom"
                       value={requested || ""}
-                      onChange={(e) =>
-                        setQty({ ...qty, [x.article_id]: Math.max(0, Math.floor(Number((e.target.value || "0").replace(",", ".")) || 0)) })
-                      }
+                      onChange={(e) => {
+                        const kom = Math.max(0, Math.floor(Number((e.target.value || "0").replace(",", ".")) || 0));
+                        setQty({ ...qty, [x.article_id]: kom });
+                        if (Number(x.transportno_pakovanje || 0) > 0) {
+                          setBoxQty({ ...boxQty, [x.article_id]: kom / Number(x.transportno_pakovanje) });
+                        }
+                      }}
                       className="trebQtyInput"
                     />
+                    {Number(x.transportno_pakovanje || 0) > 0 && (
+                      <div style={{marginTop:8,display:"grid",gridTemplateColumns:"1fr auto",gap:6,alignItems:"end"}}>
+                        <div>
+                          <label style={{fontSize:11,fontWeight:1000,color:"#ef7d00"}}>KUTIJA</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            inputMode="numeric"
+                            placeholder="npr. 3 kutije"
+                            value={boxQty[x.article_id] || ""}
+                            onChange={(e) => {
+                              const boxes = Math.max(0, Number((e.target.value || "0").replace(",", ".")) || 0);
+                              setBoxQty({ ...boxQty, [x.article_id]: boxes });
+                              setQty({ ...qty, [x.article_id]: Math.round(boxes * Number(x.transportno_pakovanje || 0)) });
+                            }}
+                            className="trebQtyInput"
+                            style={{borderColor:"#ef7d00"}}
+                          />
+                        </div>
+                        <button type="button" className="btn" style={{background:"#ef7d00",color:"white",minHeight:46,padding:"0 10px"}}
+                          onClick={() => {
+                            const p = Number(x.transportno_pakovanje || 0);
+                            const nextBoxes = Math.floor(Number(qty[x.article_id] || 0) / p) + 1;
+                            setBoxQty({ ...boxQty, [x.article_id]: nextBoxes });
+                            setQty({ ...qty, [x.article_id]: nextBoxes * p });
+                          }}>
+                          +1 KUTIJA
+                        </button>
+                      </div>
+                    )}
+                    {requested > 0 && Number(x.transportno_pakovanje || 0) > 0 && (
+                      <small style={{display:"block",marginTop:6,fontWeight:1000,color:"#ef7d00"}}>
+                        {requested} kom = {kutijeLabel(requested, x.transportno_pakovanje)}
+                      </small>
+                    )}
                   </div>
                 </div>
               );

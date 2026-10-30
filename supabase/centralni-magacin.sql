@@ -26,6 +26,7 @@ create table if not exists cm_articles(
  barkod text unique,
  jm text not null default 'KOM',
  maloprodajna_cena numeric(14,2) not null default 0,
+ transportno_pakovanje integer check (transportno_pakovanje is null or transportno_pakovanje > 0),
  active boolean not null default true,
  updated_at timestamptz not null default now()
 );

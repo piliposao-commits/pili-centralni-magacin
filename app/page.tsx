@@ -26,6 +26,7 @@ type Stock = {
   inbound_qty?: number;
   outbound_qty?: number;
   calculated_qty?: number;
+  transportno_pakovanje?: number | null;
 };
 
 type Location = {
@@ -43,6 +44,7 @@ type TransferLine = {
   jm: string;
   qty: number;
   stock: number;
+  transportno_pakovanje?: number | null;
 };
 
 type RequestLine = {
@@ -51,6 +53,7 @@ type RequestLine = {
   naziv: string;
   jm: string;
   qty: number;
+  transportno_pakovanje?: number | null;
 };
 
 type Req = {
@@ -72,6 +75,7 @@ type InboundLine = {
   jm: string;
   qty: number;
   price: number;
+  transportno_pakovanje?: number | null;
 };
 
 type InboundDoc = {
@@ -115,6 +119,14 @@ const qtyLabel = (n: number) =>
     minimumFractionDigits: 0,
     maximumFractionDigits: 3,
   });
+
+
+const kutijeLabel = (qty: number, pakovanje?: number | null) => {
+  const p = Number(pakovanje || 0);
+  if (p <= 0) return "";
+  const boxes = Number(qty || 0) / p;
+  return `${boxes.toLocaleString("sr-RS", { maximumFractionDigits: 2 })} kutija`;
+};
 
 const articleImageKey = (x: { sifra?: string; barkod?: string | null; article_id?: string }) =>
   x.sifra ? `sifra:${x.sifra}` : x.barkod ? `barkod:${x.barkod}` : `id:${x.article_id || "unknown"}`;
@@ -323,6 +335,7 @@ export default function Page() {
   const [requestId, setRequestId] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<Stock | null>(null);
   const [selectedQty, setSelectedQty] = useState(1);
+  const [selectedBoxQty, setSelectedBoxQty] = useState(0);
   const [images, setImages] = useState<Record<string, string>>({});
 
   const [activeReq, setActiveReq] = useState<Req | null>(null);
@@ -739,6 +752,7 @@ async function saveImageAdjust() {
     setSelectedArticle(s);
     const existing = lines.find((x) => x.article_id === s.article_id);
     setSelectedQty(existing?.qty || 1);
+    setSelectedBoxQty(Number(s.transportno_pakovanje || 0) > 0 ? Number(existing?.qty || 1) / Number(s.transportno_pakovanje) : 0);
   }
 
   function addSelected() {
@@ -768,6 +782,7 @@ async function saveImageAdjust() {
           jm: selectedArticle.jm,
           qty,
           stock: Number(selectedArticle.stanje),
+          transportno_pakovanje: selectedArticle.transportno_pakovanje || null,
         },
       ]);
     }
@@ -870,6 +885,28 @@ async function saveImageAdjust() {
       await load();
     } catch (e: any) {
       const poruka = e?.message || "Greška pri čuvanju barkoda.";
+      setMsg(`GREŠKA: ${poruka}`);
+      alert(poruka);
+    } finally {
+      setSavingArticleMeta(null);
+    }
+  }
+
+  async function saveArticlePackaging(article_id: string, transportno_pakovanje: number | null) {
+    setSavingArticleMeta(article_id);
+    try {
+      const r = await fetch("/api/article", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ article_id, transportno_pakovanje }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j?.ok) throw new Error(j?.message || "Greška pri čuvanju transportnog pakovanja.");
+      setMsg(transportno_pakovanje ? `✓ Transportno pakovanje je sačuvano: ${transportno_pakovanje} kom/kutija.` : "✓ Transportno pakovanje je uklonjeno.");
+      await load();
+      setHistoryArticle((prev) => prev && prev.article_id === article_id ? { ...prev, transportno_pakovanje: transportno_pakovanje || null } : prev);
+    } catch (e: any) {
+      const poruka = e?.message || "Greška pri čuvanju transportnog pakovanja.";
       setMsg(`GREŠKA: ${poruka}`);
       alert(poruka);
     } finally {
@@ -1713,7 +1750,7 @@ async function saveImageAdjust() {
                     <td style={{border:"1px solid #aaa",padding:7}}>{l.sifra}</td>
                     <td style={{border:"1px solid #aaa",padding:7}}>{l.naziv}</td>
                     <td style={{border:"1px solid #aaa",padding:7}}>{stock.find(a => a.article_id === l.article_id)?.barkod || "—"}</td>
-                    <td style={{border:"1px solid #aaa",padding:7,textAlign:"right",fontWeight:700}}>{qtyLabel(Number(l.qty))}</td>
+                    <td style={{border:"1px solid #aaa",padding:7,textAlign:"right",fontWeight:700}}>{qtyLabel(Number(l.qty))}{Number(l.transportno_pakovanje||0)>0 ? ` · ${kutijeLabel(Number(l.qty),l.transportno_pakovanje)}` : ""}</td>
                     <td style={{border:"1px solid #aaa",padding:7}}>{l.jm}</td>
                     <td style={{border:"1px solid #aaa",padding:7,minWidth:70}}>&nbsp;</td>
                   </tr>
@@ -1762,10 +1799,10 @@ async function saveImageAdjust() {
                               {l.sendQty !== Number(l.qty) ? (
                                 <>
                                   <span className="magPackOldQty">{qtyLabel(Number(l.qty))} {l.jm}</span>
-                                  <b className="magPackNewQty">{qtyLabel(l.sendQty)} {l.jm}</b>
+                                  <b className="magPackNewQty">{qtyLabel(l.sendQty)} {l.jm}{Number(l.transportno_pakovanje||0)>0 ? ` · ${kutijeLabel(l.sendQty,l.transportno_pakovanje)}` : ""}</b>
                                 </>
                               ) : (
-                                <b>{qtyLabel(Number(l.qty))} {l.jm}</b>
+                                <b>{qtyLabel(Number(l.qty))} {l.jm}{Number(l.transportno_pakovanje||0)>0 ? ` · ${kutijeLabel(Number(l.qty),l.transportno_pakovanje)}` : ""}</b>
                               )}
                             </div>
                           </div>
@@ -1833,8 +1870,8 @@ async function saveImageAdjust() {
                   {prepared.map((l) => (
                     <tr key={l.article_id}>
                       <td><b>{l.naziv}</b><div style={{ fontSize: 12, color: "#6b7280" }}>Šifra {l.sifra}</div></td>
-                      <td className="right">{qtyLabel(Number(l.qty))} {l.jm}</td>
-                      <td className="right"><b>{qtyLabel(l.sendQty)} {l.jm}</b></td>
+                      <td className="right">{qtyLabel(Number(l.qty))} {l.jm}{Number(l.transportno_pakovanje||0)>0 ? ` · ${kutijeLabel(Number(l.qty),l.transportno_pakovanje)}` : ""}</td>
+                      <td className="right"><b>{qtyLabel(l.sendQty)} {l.jm}{Number(l.transportno_pakovanje||0)>0 ? ` · ${kutijeLabel(l.sendQty,l.transportno_pakovanje)}` : ""}</b></td>
                       <td className="right" style={{ color: l.sendQty < Number(l.qty) ? "#b45309" : "#166534" }}>
                         {qtyLabel(Number(l.qty) - l.sendQty)} {l.jm}
                       </td>
@@ -2042,7 +2079,30 @@ async function saveImageAdjust() {
                   <div className="muted">Šifra {historyArticle.sifra} · {historyArticle.barkod || "bez barkoda"}</div>
                   <div style={{marginTop:8,fontWeight:1000,color:"#1c2f82"}}>
                     Trenutno stanje: {qtyLabel(Number(historyArticle.stanje))} {historyArticle.jm}
+                    {Number(historyArticle.transportno_pakovanje || 0) > 0 && (
+                      <span style={{color:"#ef7d00"}}> · {kutijeLabel(Number(historyArticle.stanje), historyArticle.transportno_pakovanje)}</span>
+                    )}
                   </div>
+                  {user.role === "ADMIN" && (
+                    <div style={{marginTop:14,padding:12,border:"2px solid #f4a340",borderRadius:14,background:"#fff8ed"}}>
+                      <label style={{display:"block",fontWeight:1000,color:"#9a4b00",marginBottom:6}}>TRANSPORTNO PAKOVANJE — KOMADA U 1 KUTIJI</label>
+                      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                        <input id={`pack-${historyArticle.article_id}`} type="number" min="1" step="1"
+                          defaultValue={historyArticle.transportno_pakovanje || ""}
+                          placeholder="npr. 12"
+                          style={{flex:"1 1 160px",minHeight:44,border:"2px solid #f4a340",borderRadius:10,padding:"0 12px",fontWeight:1000,fontSize:18}} />
+                        <button className="btn" disabled={savingArticleMeta===historyArticle.article_id}
+                          onClick={() => {
+                            const el=document.getElementById(`pack-${historyArticle.article_id}`) as HTMLInputElement|null;
+                            const v=Math.floor(Number(el?.value||0));
+                            saveArticlePackaging(historyArticle.article_id, v>0?v:null);
+                          }} style={{background:"#ef7d00",color:"white"}}>
+                          {savingArticleMeta===historyArticle.article_id ? "ČUVAM..." : "SAČUVAJ KUTIJU"}
+                        </button>
+                      </div>
+                      <small style={{display:"block",marginTop:6,color:"#7c4a00"}}>Primer: ako je 12 kom u kutiji, 3 kutije = 36 kom.</small>
+                    </div>
+                  )}
                 </div>
                 <button className="btn btnGhost" onClick={() => setHistoryArticle(null)}>✕ ZATVORI</button>
               </div>
@@ -2151,6 +2211,9 @@ async function saveImageAdjust() {
               <h2 style={{ marginTop: 12 }}>{selectedArticle.naziv}</h2>
               <div style={{ fontSize: 18, color: "#1c2f82", fontWeight: 900 }}>
                 Na stanju: {qtyLabel(Number(selectedArticle.stanje))} {selectedArticle.jm}
+                {Number(selectedArticle.transportno_pakovanje || 0) > 0 && (
+                  <div style={{color:"#ef7d00",fontSize:14,marginTop:3}}>{kutijeLabel(Number(selectedArticle.stanje), selectedArticle.transportno_pakovanje)} · {selectedArticle.transportno_pakovanje} kom/kutija</div>
+                )}
               </div>
               <div className="field">
                 <label>Količina za slanje</label>
@@ -2159,10 +2222,23 @@ async function saveImageAdjust() {
                   type="number"
                   step="0.001"
                   value={selectedQty}
-                  onChange={(e) => setSelectedQty(Number(e.target.value))}
+                  onChange={(e) => {
+                    const q=Number(e.target.value);
+                    setSelectedQty(q);
+                    if(Number(selectedArticle.transportno_pakovanje||0)>0) setSelectedBoxQty(q/Number(selectedArticle.transportno_pakovanje));
+                  }}
                   style={{ fontSize: 28, fontWeight: 1000, textAlign: "center" }}
                 />
               </div>
+              {Number(selectedArticle.transportno_pakovanje || 0) > 0 && (
+                <div className="field">
+                  <label>Kutija ({selectedArticle.transportno_pakovanje} kom/kutija)</label>
+                  <input type="number" min="0" step="1" value={selectedBoxQty || ""}
+                    onChange={(e)=>{ const b=Number(e.target.value||0); setSelectedBoxQty(b); setSelectedQty(b*Number(selectedArticle.transportno_pakovanje||0)); }}
+                    style={{fontSize:24,fontWeight:1000,textAlign:"center",borderColor:"#ef7d00"}} />
+                  <small style={{fontWeight:900,color:"#ef7d00"}}>{qtyLabel(Number(selectedQty))} {selectedArticle.jm} = {kutijeLabel(Number(selectedQty),selectedArticle.transportno_pakovanje)}</small>
+                </div>
+              )}
               <div className="row">
                 <button className="btn btnGhost grow" onClick={() => setSelectedArticle(null)}>Odustani</button>
                 <button className="btn grow" style={{ background: "#ef7d00", color: "white" }} onClick={addSelected}>DODAJ</button>
@@ -3049,7 +3125,7 @@ async function saveImageAdjust() {
                           </>
                         )}
                       </td>
-                      <td className="right">{s.stanje} {s.jm}</td>
+                      <td className="right"><b>{qtyLabel(Number(s.stanje))} {s.jm}</b>{Number(s.transportno_pakovanje||0)>0 && <div style={{fontSize:11,color:"#ef7d00",fontWeight:1000}}>{kutijeLabel(Number(s.stanje),s.transportno_pakovanje)}</div>}</td>
                       <td className="right">{money(s.maloprodajna_cena)}</td>
                       <td className="right"><b>{money(s.vrednost)}</b></td>
                     </tr>
@@ -3180,7 +3256,7 @@ async function saveImageAdjust() {
                   <tbody>
                     {(adminReq.lines||[]).map((l:any) => (
                       <tr key={l.article_id}>
-                        <td>{l.sifra}</td><td><b>{l.naziv}</b></td><td className="right">{qtyLabel(Number(l.qty))}</td><td>{l.jm}</td>
+                        <td>{l.sifra}</td><td><b>{l.naziv}</b></td><td className="right">{qtyLabel(Number(l.qty))}{Number(l.transportno_pakovanje||0)>0 ? ` · ${kutijeLabel(Number(l.qty),l.transportno_pakovanje)}` : ""}</td><td>{l.jm}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -3209,7 +3285,7 @@ async function saveImageAdjust() {
                     <tr key={l.article_id}>
                       <td style={{border:"1px solid #bbb",padding:8}}>{l.sifra}</td>
                       <td style={{border:"1px solid #bbb",padding:8}}>{l.naziv}</td>
-                      <td style={{border:"1px solid #bbb",padding:8,textAlign:"right"}}>{qtyLabel(Number(l.qty))}</td>
+                      <td style={{border:"1px solid #bbb",padding:8,textAlign:"right"}}>{qtyLabel(Number(l.qty))}{Number(l.transportno_pakovanje||0)>0 ? ` · ${kutijeLabel(Number(l.qty),l.transportno_pakovanje)}` : ""}</td>
                       <td style={{border:"1px solid #bbb",padding:8}}>{l.jm}</td>
                       <td style={{border:"1px solid #bbb",padding:8,minWidth:85}}>&nbsp;</td>
                     </tr>

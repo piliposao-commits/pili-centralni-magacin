@@ -55,7 +55,7 @@ export async function GET() {
         .eq("destination_location_id", central.id)
         .order("created_at", { ascending: false })
         .limit(100),
-      admin.from("cm_articles").select("id,image_zoom,image_x,image_y"),
+      admin.from("cm_articles").select("id,image_zoom,image_x,image_y,transportno_pakovanje"),
       articleImageMap(),
     ]);
 
@@ -66,13 +66,14 @@ export async function GET() {
           image_zoom: Number(a.image_zoom || 1),
           image_x: Number(a.image_x || 0),
           image_y: Number(a.image_y || 0),
+          transportno_pakovanje: Number(a.transportno_pakovanje || 0) || null,
         },
       ])
     );
 
     const safeStock = (stock || []).map((x: any) => {
       const articleId = String(x.article_id);
-      const position = positionMap.get(articleId) || { image_zoom: 1, image_x: 0, image_y: 0 };
+      const position = positionMap.get(articleId) || { image_zoom: 1, image_x: 0, image_y: 0, transportno_pakovanje: null };
       const inbound = Number(inboundMap.get(articleId) || 0);
       const outbound = Number(outboundMap.get(articleId) || 0);
       const calculated = inbound - outbound;
@@ -82,6 +83,7 @@ export async function GET() {
         image_zoom: position.image_zoom,
         image_x: position.image_x,
         image_y: position.image_y,
+        transportno_pakovanje: position.transportno_pakovanje,
         initial_qty: 0,
         inbound_qty: inbound,
         outbound_qty: outbound,
@@ -103,10 +105,21 @@ export async function GET() {
         supplier: d.supplier || null,
         status: d.status,
         created_at: d.created_at,
-        lines: Array.isArray(d.cm_document_lines) ? d.cm_document_lines : [],
+        lines: (Array.isArray(d.cm_document_lines) ? d.cm_document_lines : []).map((line: any) => ({
+          ...line,
+          transportno_pakovanje: positionMap.get(String(line.article_id))?.transportno_pakovanje || null,
+        })),
       }));
 
-    return NextResponse.json({ ok: true, user: s, locations, stock: safeStock, requests: reqs || [], inbounds: safeInbounds });
+    const safeRequests = (reqs || []).map((r: any) => ({
+      ...r,
+      lines: (Array.isArray(r.lines) ? r.lines : []).map((line: any) => ({
+        ...line,
+        transportno_pakovanje: positionMap.get(String(line.article_id))?.transportno_pakovanje || null,
+      })),
+    }));
+
+    return NextResponse.json({ ok: true, user: s, locations, stock: safeStock, requests: safeRequests, inbounds: safeInbounds });
   } catch (e: any) {
     return NextResponse.json({ ok: false, message: e.message }, { status: e.message === "UNAUTHORIZED" ? 401 : 500 });
   }
