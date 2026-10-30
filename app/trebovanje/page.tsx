@@ -562,20 +562,24 @@ export default function TrebovanjePage() {
                       <button
                         type="button"
                         className="btn"
-                        disabled={Number(x.transportno_pakovanje || 0) <= 0}
                         style={{
-                          background:Number(x.transportno_pakovanje || 0) > 0 ? "#ef7d00" : "#cbd5e1",
+                          background:Number(x.transportno_pakovanje || 0) > 0 ? "#ef7d00" : "#1c2f82",
                           color:"white",minHeight:46,padding:"0 10px",
-                          cursor:Number(x.transportno_pakovanje || 0) > 0 ? "pointer" : "not-allowed"
+                          cursor:"pointer",fontWeight:1000
                         }}
                         onClick={() => {
                           const p = Number(x.transportno_pakovanje || 0);
-                          if (p <= 0) return;
-                          const nextBoxes = Math.floor(Number(qty[x.article_id] || 0) / p) + 1;
+                          if (p <= 0) {
+                            alert(`Za ${x.naziv} još nije podešeno transportno pakovanje.\n\nOtvori ADMIN → STANJE, klikni na artikal i unesi koliko komada ima 1 kutija.`);
+                            window.open("/", "_blank");
+                            return;
+                          }
+                          const currentBoxes = Number(boxQty[x.article_id] || 0);
+                          const nextBoxes = Math.floor(currentBoxes) + 1;
                           setBoxQty({ ...boxQty, [x.article_id]: nextBoxes });
                           setQty({ ...qty, [x.article_id]: nextBoxes * p });
                         }}>
-                        +1 KUTIJA
+                        {Number(x.transportno_pakovanje || 0) > 0 ? "DODAJ KUTIJU" : "PODESI KUTIJU"}
                       </button>
                     </div>
                     {requested > 0 && Number(x.transportno_pakovanje || 0) > 0 && (
