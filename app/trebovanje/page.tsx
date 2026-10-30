@@ -72,6 +72,7 @@ export default function TrebovanjePage() {
   const [q, setQ] = useState("");
   const [qty, setQty] = useState<Record<string, number>>({});
   const [boxQty, setBoxQty] = useState<Record<string, number>>({});
+  const [packDraft, setPackDraft] = useState<Record<string, number>>({});
   const [review, setReview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -530,58 +531,79 @@ export default function TrebovanjePage() {
                       }}
                       className="trebQtyInput"
                     />
-                    <div style={{marginTop:8,display:"grid",gridTemplateColumns:"1fr auto",gap:6,alignItems:"end"}}>
-                      <div>
-                        <label style={{fontSize:11,fontWeight:1000,color:"#ef7d00"}}>KUTIJE</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          inputMode="numeric"
-                          placeholder={Number(x.transportno_pakovanje || 0) > 0 ? "npr. 3 kutije" : "nije podešeno"}
-                          value={boxQty[x.article_id] || ""}
-                          disabled={Number(x.transportno_pakovanje || 0) <= 0}
-                          onChange={(e) => {
-                            const boxes = Math.max(0, Number((e.target.value || "0").replace(",", ".")) || 0);
-                            setBoxQty({ ...boxQty, [x.article_id]: boxes });
-                            setQty({ ...qty, [x.article_id]: Math.round(boxes * Number(x.transportno_pakovanje || 0)) });
-                          }}
-                          className="trebQtyInput"
-                          style={{
-                            borderColor:"#ef7d00",
-                            opacity:Number(x.transportno_pakovanje || 0) > 0 ? 1 : .55,
-                            background:Number(x.transportno_pakovanje || 0) > 0 ? "#fff" : "#f3f4f6"
-                          }}
-                        />
-                        <small style={{display:"block",marginTop:4,fontWeight:900,color:Number(x.transportno_pakovanje || 0) > 0 ? "#ef7d00" : "#9ca3af"}}>
-                          {Number(x.transportno_pakovanje || 0) > 0
-                            ? `1 kutija = ${x.transportno_pakovanje} kom`
-                            : "Admin treba da unese komada u 1 kutiji"}
-                        </small>
+                    {Number(x.transportno_pakovanje || 0) <= 0 ? (
+                      <div style={{marginTop:8,padding:8,border:"1px dashed #ef7d00",borderRadius:10,background:"#fff8ef"}}>
+                        <label style={{fontSize:11,fontWeight:1000,color:"#ef7d00"}}>KOM U 1 KUTIJI</label>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:6,marginTop:4}}>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            inputMode="numeric"
+                            placeholder="npr. 12"
+                            value={packDraft[x.article_id] || ""}
+                            onChange={(e) => setPackDraft({ ...packDraft, [x.article_id]: Math.max(0, Math.floor(Number(e.target.value || 0))) })}
+                            className="trebQtyInput"
+                            style={{borderColor:"#ef7d00"}}
+                          />
+                          <button
+                            type="button"
+                            className="btn"
+                            style={{background:"#1c2f82",color:"white",fontWeight:1000,padding:"0 10px"}}
+                            onClick={async () => {
+                              const p = Math.max(0, Math.floor(Number(packDraft[x.article_id] || 0)));
+                              if (p <= 0) { alert("Unesi koliko komada ima jedna kutija."); return; }
+                              const r = await fetch("/api/trebovanje-packaging", {
+                                method:"POST",
+                                headers:{"content-type":"application/json"},
+                                body:JSON.stringify({ article_id:x.article_id, transportno_pakovanje:p })
+                              });
+                              const j = await r.json();
+                              if (!r.ok || !j.ok) { alert(j.message || "Nije sačuvano."); return; }
+                              setStock(prev => prev.map(a => a.article_id === x.article_id ? { ...a, transportno_pakovanje:p } : a));
+                              setPackDraft({ ...packDraft, [x.article_id]: p });
+                            }}
+                          >SAČUVAJ</button>
+                        </div>
+                        <small style={{display:"block",marginTop:4,fontWeight:900,color:"#9a5a00"}}>Jednom podesi pakovanje, pa možeš odmah da unosiš kutije.</small>
                       </div>
-                      <button
-                        type="button"
-                        className="btn"
-                        style={{
-                          background:Number(x.transportno_pakovanje || 0) > 0 ? "#ef7d00" : "#1c2f82",
-                          color:"white",minHeight:46,padding:"0 10px",
-                          cursor:"pointer",fontWeight:1000
-                        }}
-                        onClick={() => {
-                          const p = Number(x.transportno_pakovanje || 0);
-                          if (p <= 0) {
-                            alert(`Za ${x.naziv} još nije podešeno transportno pakovanje.\n\nOtvori ADMIN → STANJE, klikni na artikal i unesi koliko komada ima 1 kutija.`);
-                            window.open("/", "_blank");
-                            return;
-                          }
-                          const currentBoxes = Number(boxQty[x.article_id] || 0);
-                          const nextBoxes = Math.floor(currentBoxes) + 1;
-                          setBoxQty({ ...boxQty, [x.article_id]: nextBoxes });
-                          setQty({ ...qty, [x.article_id]: nextBoxes * p });
-                        }}>
-                        {Number(x.transportno_pakovanje || 0) > 0 ? "DODAJ KUTIJU" : "PODESI KUTIJU"}
-                      </button>
-                    </div>
+                    ) : (
+                      <div style={{marginTop:8,display:"grid",gridTemplateColumns:"1fr auto",gap:6,alignItems:"end"}}>
+                        <div>
+                          <label style={{fontSize:11,fontWeight:1000,color:"#ef7d00"}}>BROJ KUTIJA</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            inputMode="numeric"
+                            placeholder="npr. 3"
+                            value={boxQty[x.article_id] || ""}
+                            onChange={(e) => {
+                              const boxes = Math.max(0, Math.floor(Number((e.target.value || "0").replace(",", ".")) || 0));
+                              setBoxQty({ ...boxQty, [x.article_id]: boxes });
+                              setQty({ ...qty, [x.article_id]: boxes * Number(x.transportno_pakovanje || 0) });
+                            }}
+                            className="trebQtyInput"
+                            style={{borderColor:"#ef7d00"}}
+                          />
+                          <small style={{display:"block",marginTop:4,fontWeight:900,color:"#ef7d00"}}>
+                            1 kutija = {x.transportno_pakovanje} kom
+                          </small>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn"
+                          style={{background:"#ef7d00",color:"white",minHeight:46,padding:"0 10px",cursor:"pointer",fontWeight:1000}}
+                          onClick={() => {
+                            const p = Number(x.transportno_pakovanje || 0);
+                            const currentBoxes = Number(boxQty[x.article_id] || 0);
+                            const nextBoxes = Math.floor(currentBoxes) + 1;
+                            setBoxQty({ ...boxQty, [x.article_id]: nextBoxes });
+                            setQty({ ...qty, [x.article_id]: nextBoxes * p });
+                          }}
+                        >DODAJ KUTIJU</button>
+                      </div>
+                    )}
                     {requested > 0 && Number(x.transportno_pakovanje || 0) > 0 && (
                       <small style={{display:"block",marginTop:6,fontWeight:1000,color:"#ef7d00"}}>
                         {requested} kom = {kutijeLabel(requested, x.transportno_pakovanje)}
