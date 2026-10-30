@@ -79,7 +79,7 @@ export async function GET(req: Request) {
         });
       } else if (type === "TREBOVANJE") {
         const reqStatus = String(d.status || "").toUpperCase();
-        const booked = ["POSLATO", "PRIMLJENO", "ZAVRSENO"].includes(reqStatus);
+        const booked = ["POSLATO", "POSLATO_TS", "PRIMLJENO", "ZAVRSENO"].includes(reqStatus);
         events.push({
           kind: "TREBOVANJE",
           created_at: d.created_at,

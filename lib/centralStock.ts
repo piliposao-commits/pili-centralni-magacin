@@ -1,5 +1,5 @@
-const BOOKED_REQUEST_STATUSES = new Set(["POSLATO", "PRIMLJENO", "ZAVRSENO"]);
-const BOOKED_TRANSFER_STATUSES = new Set(["POSLATO", "PRIMLJENO", "ZAVRSENO"]);
+const BOOKED_REQUEST_STATUSES = new Set(["POSLATO", "POSLATO_TS", "PRIMLJENO", "ZAVRSENO"]);
+const BOOKED_TRANSFER_STATUSES = new Set(["POSLATO", "POSLATO_TS", "PRIMLJENO", "ZAVRSENO"]);
 
 export type StockLedger = {
   inboundMap: Map<string, number>;

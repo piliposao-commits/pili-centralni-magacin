@@ -21,6 +21,102 @@ export async function POST(req: Request) {
       }
 
       let data: any = null;
+
+      // ADMIN "PROKNJIŽI": ne završavamo zahtev odmah. Umesto toga pravimo
+      // TS Market movement-e u tačno definisanom outbox-u. TS Market ih preuzima
+      // preko /api/integrations/ts-market/v1/movements i potvrđuje preko
+      // /acknowledgements. Tek kada SVE stavke dobiju POSTED, zahtev prelazi u PRIMLJENO.
+      if (targetStatus === "PRIMLJENO") {
+        const requestId = String(b.request_id || "");
+        const { data: doc, error: docErr } = await admin
+          .from("cm_documents")
+          .select("id,status,type,destination_location_id,created_at")
+          .eq("id", requestId)
+          .eq("type", "TREBOVANJE")
+          .single();
+        if (docErr) throw docErr;
+        const currentStatus = String(doc?.status || "").toUpperCase();
+        if (currentStatus === "PRIMLJENO" || currentStatus === "ZAVRSENO") {
+          return NextResponse.json({ ok: true, data: doc, status: currentStatus, ts_market_pending: false });
+        }
+        if (currentStatus !== "POSLATO" && currentStatus !== "POSLATO_TS") {
+          return NextResponse.json({ ok: false, message: "Trebovanje još nije potvrđeno od magacionera." }, { status: 400 });
+        }
+
+        const [{ data: dest, error: destErr }, { data: rows, error: rowsErr }] = await Promise.all([
+          admin.from("cm_locations").select("id,code,name,ts_market_warehouse_code").eq("id", doc.destination_location_id).single(),
+          admin.from("cm_document_lines")
+            .select("id,article_id,sifra,naziv,jm,qty")
+            .eq("document_id", requestId)
+            .gt("qty", 0),
+        ]);
+        if (destErr) throw destErr;
+        if (rowsErr) throw rowsErr;
+        if (!rows?.length) throw new Error("Trebovanje nema stavke za TS Market.");
+
+        const now = new Date().toISOString();
+        const tsCode = String(dest?.ts_market_warehouse_code || "TO_MAP");
+        const movements = rows.map((line: any) => ({
+          movement_id: `cm-${String(line.id)}`,
+          revision: 1,
+          occurred_at: now,
+          pili_store_code: String(dest?.code || ""),
+          ts_market_warehouse_code: tsCode,
+          kind: "WAREHOUSE_TRANSFER",
+          pili_article_id: String(line.article_id),
+          pili_sifra: String(line.sifra || ""),
+          item_name: String(line.naziv || ""),
+          unit: String(line.jm || "KOM"),
+          quantity: Number(line.qty || 0),
+          from_warehouse_code: "20",
+          to_warehouse_code: tsCode,
+          source_record_id: requestId,
+          test: false,
+          status: "READY",
+          updated_at: now,
+        }));
+
+        // Idempotentno: isti movement_id + revision ne može duplo da se knjiži.
+        for (const movement of movements) {
+          const { data: existing, error: existingErr } = await admin
+            .from("ts_market_movements")
+            .select("movement_id,status")
+            .eq("movement_id", movement.movement_id)
+            .eq("revision", movement.revision)
+            .maybeSingle();
+          if (existingErr) throw existingErr;
+          // POSTED nikad ne vraćamo u READY. REJECTED se može ponovo poslati istim id-em.
+          if (String(existing?.status || "").toUpperCase() === "POSTED") continue;
+          const { error: upErr } = await admin
+            .from("ts_market_movements")
+            .upsert(movement, { onConflict: "movement_id,revision" });
+          if (upErr) throw upErr;
+        }
+
+        const { data: queued, error: queueErr } = await admin
+          .from("cm_documents")
+          .update({ status: "POSLATO_TS", updated_at: now, created_by: session.id })
+          .eq("id", requestId)
+          .eq("type", "TREBOVANJE")
+          .select("id,status")
+          .single();
+        if (queueErr) throw queueErr;
+        data = queued;
+
+        const { data: central, error: centralErr } = await admin.from("cm_locations")
+          .select("id").eq("type", "CENTRAL").limit(1).single();
+        if (centralErr || !central?.id) throw centralErr || new Error("Centralni magacin nije pronađen.");
+        await reconcileCentralStock(admin, String(central.id));
+
+        return NextResponse.json({
+          ok: true,
+          data,
+          status: "POSLATO_TS",
+          ts_market_pending: true,
+          message: "Trebovanje je poslato TS Marketu i čeka potvrdu knjiženja.",
+        });
+      }
+
       if (targetStatus === "ZAVRSENO") {
         const { data: archived, error } = await admin
           .from("cm_documents")
@@ -40,12 +136,6 @@ export async function POST(req: Request) {
         });
         if (error) throw error;
         data = changed;
-      }
-      if (targetStatus === "PRIMLJENO") {
-        const { data: central, error: centralErr } = await admin.from("cm_locations")
-          .select("id").eq("type", "CENTRAL").limit(1).single();
-        if (centralErr || !central?.id) throw centralErr || new Error("Centralni magacin nije pronađen.");
-        await reconcileCentralStock(admin, String(central.id));
       }
       return NextResponse.json({ ok: true, data, status: targetStatus });
     }
@@ -73,7 +163,7 @@ export async function POST(req: Request) {
         .eq("type", "TREBOVANJE")
         .single();
       if (docErr) throw docErr;
-      if (["POSLATO", "PRIMLJENO"].includes(String(doc.status || "").toUpperCase())) {
+      if (["POSLATO", "POSLATO_TS", "PRIMLJENO", "ZAVRSENO"].includes(String(doc.status || "").toUpperCase())) {
         return NextResponse.json({ ok: false, message: "Trebovanje je već potvrđeno." }, { status: 400 });
       }
 

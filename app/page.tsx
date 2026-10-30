@@ -657,6 +657,14 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
       return;
     }
 
+    if (j.ts_market_pending || j.status === "POSLATO_TS") {
+      const updated = { ...adminReq, status: "POSLATO_TS" };
+      setAdminReq(updated);
+      setRequests((prev) => prev.map((x) => x.id === updated.id ? updated : x));
+      setMsg("✓ Poslato TS Marketu — čeka potvrdu knjiženja.");
+      return;
+    }
+
     const updated = { ...adminReq, status: "PRIMLJENO" };
     setAdminReq(updated);
     setRequests((prev) => prev.map((x) => x.id === updated.id ? updated : x));
@@ -1355,6 +1363,7 @@ async function saveImageAdjust() {
   const workRequests = requests.filter((r) => r.status === "NOVO" || r.status === "U PRIPREMI");
   const incomingForAdmin = requests.filter((r) => r.status === "NOVO" || r.status === "U PRIPREMI");
   const readyForAdmin = requests.filter((r) => r.status === "POSLATO");
+  const tsPendingRequests = requests.filter((r) => r.status === "POSLATO_TS");
   const bookedRequests = requests.filter((r) => r.status === "PRIMLJENO");
   const archivedRequests = requests.filter((r) => r.status === "ZAVRSENO");
 
@@ -1412,7 +1421,7 @@ async function saveImageAdjust() {
               }}
             >
               {incomingForAdmin.length + readyForAdmin.length > 0 ? "📬" : "✉️"} Trebovanja
-              {incomingForAdmin.length + readyForAdmin.length > 0 ? ` (${incomingForAdmin.length + readyForAdmin.length})` : ""}
+              {incomingForAdmin.length + readyForAdmin.length > 0 ? ` (${incomingForAdmin.length + readyForAdmin.length + tsPendingRequests.length})` : ""}
             </button>
           </div>
         )}
@@ -2155,7 +2164,7 @@ async function saveImageAdjust() {
                     </div>
                     <div style={{padding:14,borderRadius:14,background:"#fff7ed"}}>
                       <div style={{fontSize:11,fontWeight:1000,color:"#c2410c"}}>UKUPNO TREBOVANO</div>
-                      <div style={{fontSize:24,fontWeight:1000}}>-{qtyLabel(articleHistory.events.filter(e=>e.kind==="TREBOVANJE" && e.booked !== false && ["POSLATO","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase())).reduce((a,e)=>a+Number(e.qty||0),0))}</div>
+                      <div style={{fontSize:24,fontWeight:1000}}>-{qtyLabel(articleHistory.events.filter(e=>e.kind==="TREBOVANJE" && e.booked !== false && ["POSLATO","POSLATO_TS","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase())).reduce((a,e)=>a+Number(e.qty||0),0))}</div>
                     </div>
                     <div style={{padding:14,borderRadius:14,background:"#eef2ff"}}>
                       <div style={{fontSize:11,fontWeight:1000,color:"#3730a3"}}>POSLEDNJI POPIS</div>
@@ -2174,15 +2183,15 @@ async function saveImageAdjust() {
                           .map((e, i) => (
                             <tr key={`${e.kind}-${e.created_at}-${i}`}>
                               <td>{new Date(e.created_at).toLocaleString("sr-RS")}</td>
-                              <td><b>{e.kind === "ULAZ" ? "ULAZ" : e.kind === "POPIS" ? "POPIS" : (e.booked === false || !["POSLATO","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase())) ? "ČEKA PAKOVANJE" : "IZLAZ"}</b></td>
+                              <td><b>{e.kind === "ULAZ" ? "ULAZ" : e.kind === "POPIS" ? "POPIS" : (e.booked === false || !["POSLATO","POSLATO_TS","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase())) ? "ČEKA PAKOVANJE" : "IZLAZ"}</b></td>
                               <td>{e.detail}</td>
                               <td>{e.status}</td>
-                              <td className="right" style={{fontWeight:1000,color:e.kind==="ULAZ" ? "#16803a" : e.kind==="POPIS" ? "#1c2f82" : (e.booked === false || !["POSLATO","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase())) ? "#6b7280" : "#c2410c"}}>
+                              <td className="right" style={{fontWeight:1000,color:e.kind==="ULAZ" ? "#16803a" : e.kind==="POPIS" ? "#1c2f82" : (e.booked === false || !["POSLATO","POSLATO_TS","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase())) ? "#6b7280" : "#c2410c"}}>
                                 {e.kind === "POPIS"
                                   ? qtyLabel(Number(e.qty||0))
                                   : e.kind === "ULAZ"
                                     ? `+${qtyLabel(Number(e.qty||0))}`
-                                    : (e.booked === false || !["POSLATO","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase()))
+                                    : (e.booked === false || !["POSLATO","POSLATO_TS","PRIMLJENO","ZAVRSENO"].includes(String(e.status||"").toUpperCase()))
                                       ? `${qtyLabel(Number(e.qty||0))} traženo`
                                       : `-${qtyLabel(Number(e.qty||0))}`} {historyArticle.jm}
                               </td>
@@ -3212,6 +3221,21 @@ async function saveImageAdjust() {
                 </button>
               ))}
             </div>
+
+            {tsPendingRequests.length > 0 && (
+              <>
+                <h3 style={{marginTop:22,color:"#1c2f82"}}>↔ TS MARKET — ČEKA POTVRDU ({tsPendingRequests.length})</h3>
+                <div className="cardList" style={{marginTop:12}}>
+                  {tsPendingRequests.map((r) => (
+                    <button key={r.id} onClick={() => openAdminRequest(r)} style={{width:"100%",border:"2px solid #1c2f82",background:"#eef3ff",borderRadius:16,padding:16,textAlign:"left",cursor:"pointer",color:"inherit"}}>
+                      <div style={{fontSize:12,fontWeight:1000,color:"#1c2f82"}}>POSLATO TS MARKETU · ČEKA ACKNOWLEDGEMENT</div>
+                      <div style={{fontSize:22,fontWeight:1000,color:"#1c2f82"}}>{r.location_name}</div>
+                      <div className="muted">{r.requested_by} · {new Date(r.created_at).toLocaleString("sr-RS")} · {(r.lines||[]).length} stavki</div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
 
             {bookedRequests.length > 0 && (
               <details style={{marginTop:18}}>

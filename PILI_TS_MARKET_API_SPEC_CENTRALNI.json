@@ -1,0 +1,62 @@
+{
+  "spec_version": "1.1",
+  "integration": "PILI Centralni Magacin -> TS Market",
+  "base_url": "https://pili-centralni-magacin.vercel.app/api/integrations/ts-market/v1",
+  "authentication": {
+    "type": "Bearer token over HTTPS",
+    "header": "Authorization: Bearer <TOKEN>"
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/movements?from=2026-10-01T00:00:00%2B02:00&to=2026-10-31T23:59:59%2B01:00&limit=100&cursor=...",
+      "response_example": {
+        "items": [
+          {
+            "movement_id": "cm-<line-id>",
+            "revision": 1,
+            "occurred_at": "2026-10-30T13:55:00+01:00",
+            "store": {
+              "pili_store_code": "BOLJEVCI",
+              "ts_market_warehouse_code": "TO_MAP"
+            },
+            "kind": "WAREHOUSE_TRANSFER",
+            "from_warehouse_code": "20",
+            "to_warehouse_code": "TO_MAP",
+            "item": {
+              "pili_article_id": "<uuid>",
+              "pili_sifra": "21206",
+              "name": "KNJAZ MILOS 1.75L",
+              "unit": "KOM"
+            },
+            "quantity": "12.000",
+            "from_stock_class": null,
+            "to_stock_class": null,
+            "source_record_id": "<trebovanje-id>",
+            "test": false,
+            "status": "READY"
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/acknowledgements",
+      "request_example": {
+        "movement_id": "cm-<line-id>",
+        "revision": 1,
+        "status": "POSTED",
+        "ts_market_document_id": "TS-000123",
+        "posted_at": "2026-10-30T13:56:00+01:00"
+      }
+    }
+  ],
+  "rules": [
+    "Idempotency key is movement_id plus revision.",
+    "WAREHOUSE_TRANSFER means decrease TS Market warehouse 20 and increase destination warehouse/store.",
+    "TS Market must POST acknowledgement only after durable booking.",
+    "REJECTED acknowledgement returns the PILI request to the admin retry queue.",
+    "PILI marks the request PRIMLJENO only after every movement from that request is POSTED."
+  ]
+}
