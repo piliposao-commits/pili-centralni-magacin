@@ -7,6 +7,44 @@ export async function POST(req: Request) {
     const b = await req.json();
     const session = await requireSession();
 
+    if (b.action === "archive") {
+      if (session.role !== "ADMIN") {
+        return NextResponse.json({ ok: false, message: "Samo admin može da arhivira trebovanje." }, { status: 403 });
+      }
+
+      const requestId = String(b.request_id || "");
+      if (!requestId) {
+        return NextResponse.json({ ok: false, message: "Nedostaje ID trebovanja." }, { status: 400 });
+      }
+
+      const { data: doc, error: docErr } = await admin
+        .from("cm_documents")
+        .select("id,status,type")
+        .eq("id", requestId)
+        .eq("type", "TREBOVANJE")
+        .single();
+      if (docErr) throw docErr;
+
+      const currentStatus = String(doc?.status || "").toUpperCase();
+      if (!["NOVO", "U PRIPREMI"].includes(currentStatus)) {
+        return NextResponse.json({
+          ok: false,
+          message: "Arhiviranje je dozvoljeno samo za staro NOVO/U PRIPREMI trebovanje. Spakovano ili proknjiženo trebovanje se ne arhivira ovim dugmetom.",
+        }, { status: 400 });
+      }
+
+      const { error } = await admin
+        .from("cm_documents")
+        .update({ status: "ARHIVIRANO", updated_at: new Date().toISOString() })
+        .eq("id", requestId)
+        .eq("type", "TREBOVANJE");
+      if (error) throw error;
+
+      // ARHIVIRANO je samo administrativno sklanjanje stare stavke sa aktivne liste.
+      // Ne pravi PRENOS, ne knjiži robu i ne poziva reconcileCentralStock.
+      return NextResponse.json({ ok: true, status: "ARHIVIRANO" });
+    }
+
     if (b.action === "status") {
       const targetStatus = String(b.status || "").toUpperCase();
 

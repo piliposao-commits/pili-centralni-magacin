@@ -669,6 +669,34 @@ const [scanFiles, setScanFiles] = useState<File[]>([]);
     window.print();
   }
 
+  async function archiveAdminRequest() {
+    if (!adminReq) return;
+    if (!["NOVO", "U PRIPREMI"].includes(String(adminReq.status || "").toUpperCase())) {
+      setMsg("Možeš da arhiviraš samo staro NOVO ili U PRIPREMI trebovanje.");
+      return;
+    }
+    const ok = window.confirm(
+      `Arhivirati trebovanje za ${adminReq.location_name}?\n\nOvo ga samo sklanja sa aktivne liste. Ne knjiži robu i ne menja stanje.`
+    );
+    if (!ok) return;
+
+    const res = await fetch("/api/request", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "archive", request_id: adminReq.id }),
+    });
+    const j = await res.json();
+    if (!res.ok || !j.ok) {
+      setMsg(j.message || "Greška pri arhiviranju trebovanja.");
+      return;
+    }
+
+    const updated = { ...adminReq, status: "ARHIVIRANO" };
+    setRequests((prev) => prev.map((x) => x.id === updated.id ? updated : x));
+    setAdminReq(null);
+    setMsg("✓ Trebovanje je arhivirano i sklonjeno sa aktivne liste. Stanje nije menjano.");
+  }
+
 
 function openImageAdjust(article: Stock) {
   setImageAdjustArticle(article);
@@ -1332,6 +1360,7 @@ async function saveImageAdjust() {
   const incomingForAdmin = requests.filter((r) => r.status === "NOVO" || r.status === "U PRIPREMI");
   const readyForAdmin = requests.filter((r) => r.status === "POSLATO");
   const bookedRequests = requests.filter((r) => r.status === "PRIMLJENO");
+  const archivedRequests = requests.filter((r) => r.status === "ARHIVIRANO");
 
   return (
     <main className="page">
@@ -3226,6 +3255,26 @@ async function saveImageAdjust() {
                 </div>
               </details>
             )}
+
+            {archivedRequests.length > 0 && (
+              <details style={{marginTop:10}}>
+                <summary style={{
+                  cursor:"pointer", color:"#9ca3af", fontSize:12, fontWeight:900, userSelect:"none"
+                }}>
+                  Arhivirana trebovanja ({archivedRequests.length})
+                </summary>
+                <div style={{display:"grid", gap:6, marginTop:8}}>
+                  {archivedRequests.slice(0, 50).map((r) => (
+                    <div key={r.id} style={{
+                      width:"100%", border:"1px dashed #d1d5db", background:"#fafafa",
+                      borderRadius:9, padding:"8px 10px", color:"#9ca3af", fontSize:12
+                    }}>
+                      <b>{r.location_name}</b> · {new Date(r.created_at).toLocaleString("sr-RS")} · ARHIVIRANO
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
           </section>
         )}
 
@@ -3243,6 +3292,11 @@ async function saveImageAdjust() {
                 {adminReq.status === "POSLATO" && (
                   <button className="btn" style={{background:"#16803a",color:"white"}} onClick={() => bookAdminRequest(false)}>
                     ✓ PROKNJIŽI
+                  </button>
+                )}
+                {["NOVO", "U PRIPREMI"].includes(String(adminReq.status || "").toUpperCase()) && (
+                  <button className="btn" style={{background:"#6b7280",color:"white"}} onClick={archiveAdminRequest}>
+                    🗄 ARHIVIRAJ ODRAĐENO
                   </button>
                 )}
                 <button className="btn" style={{background:"#ef7d00",color:"white"}} onClick={printAdminRequest}>
