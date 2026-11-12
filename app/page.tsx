@@ -3181,14 +3181,6 @@ async function saveImageAdjust() {
                         >
                           {s.naziv}
                         </button>
-                        <button
-                          type="button"
-                          disabled={deletingArticleId === s.article_id}
-                          onClick={() => deleteArticle(s)}
-                          style={{ marginTop: 8, width: "100%", minHeight: 38, border: "2px solid #dc2626", borderRadius: 10, background: "#fef2f2", color: "#b91c1c", fontWeight: 1000, cursor: deletingArticleId === s.article_id ? "wait" : "pointer", padding: "6px 8px", fontSize: 11 }}
-                        >
-                          {deletingArticleId === s.article_id ? "BRIŠEM..." : "🗑 OBRIŠI ARTIKAL"}
-                        </button>
                       </td>
                       <td style={{ minWidth: 170 }}>
                         <button
@@ -3208,6 +3200,26 @@ async function saveImageAdjust() {
                           }}
                         >
                           📋 OTVORI ISTORIJU
+                        </button>
+                        <button
+                          type="button"
+                          disabled={deletingArticleId === s.article_id}
+                          onClick={() => deleteArticle(s)}
+                          style={{
+                            width: "100%",
+                            minHeight: 40,
+                            marginTop: 7,
+                            border: "2px solid #dc2626",
+                            borderRadius: 10,
+                            background: "#dc2626",
+                            color: "#fff",
+                            fontWeight: 1000,
+                            fontSize: 11,
+                            cursor: deletingArticleId === s.article_id ? "wait" : "pointer",
+                            padding: "7px 8px"
+                          }}
+                        >
+                          {deletingArticleId === s.article_id ? "BRIŠEM..." : "🗑 OBRIŠI ARTIKAL"}
                         </button>
                       </td>
                       <td style={{ minWidth: 190 }}>
