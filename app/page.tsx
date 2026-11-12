@@ -1231,16 +1231,10 @@ async function saveImageAdjust() {
 
   async function deleteArticle(article: Stock) {
     if (deletingArticleId) return;
-    const code = window.prompt(`OBRIŠI ARTIKAL\n${article.sifra} — ${article.naziv}\n\nUnesi šifru 1234:`);
-    if (code === null) return;
-    if (code !== "1234") {
-      setMsg("Pogrešna šifra. Artikal nije obrisan.");
-      return;
-    }
-    if (!window.confirm(`Trajno obrisati artikal ${article.sifra} — ${article.naziv}?\n\nBrisanje će biti dozvoljeno samo ako artikal nema dokumente, popis, TS Market kretanje ni stanje.`)) return;
+    if (!window.confirm(`Potvrdi brisanje artikla?\n\n${article.sifra} — ${article.naziv}\n\nArtikal će nestati iz STANJA i TREBOVANJA, a stara istorija ostaje sačuvana.`)) return;
 
     setDeletingArticleId(article.article_id);
-    setMsg("Brišem artikal...");
+    setMsg("Uklanjam artikal...");
     try {
       const r = await fetch("/api/article", {
         method: "DELETE",
@@ -1248,11 +1242,11 @@ async function saveImageAdjust() {
         body: JSON.stringify({ article_id: article.article_id }),
       });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j?.ok) throw new Error(j?.message || "Artikal nije obrisan.");
-      setMsg(`✓ ${j.message || "Artikal je obrisan."}`);
+      if (!r.ok || !j?.ok) throw new Error(j?.message || "Artikal nije uklonjen.");
+      setMsg(`✓ ${j.message || "Artikal je uklonjen."}`);
       await load();
     } catch (e: any) {
-      setMsg(String(e?.message || "Greška pri brisanju artikla."));
+      setMsg(String(e?.message || "Greška pri uklanjanju artikla."));
     } finally {
       setDeletingArticleId(null);
     }
@@ -2556,7 +2550,7 @@ async function saveImageAdjust() {
                 <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b", textTransform: "uppercase", letterSpacing: ".04em" }}>
                   Prethodni ulazi
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>{inboundDocs.length}</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#94a3b8" }}>{inboundDocs.length}</div>
               </div>
 
               {inboundDocs.length === 0 ? (
@@ -2644,7 +2638,7 @@ async function saveImageAdjust() {
                                             className="search"
                                             value={String(line.sifra ?? "")}
                                             onChange={(e) => patchInboundLine(line.id, "sifra", e.target.value)}
-                                            style={{ width: 105, padding: "7px 8px", fontWeight: 900 }}
+                                            style={{ width: 105, padding: "5px 8px", fontWeight: 900 }}
                                             placeholder="Nova šifra"
                                           />
                                         ) : line.sifra}
@@ -2654,12 +2648,12 @@ async function saveImageAdjust() {
                                       <td>{line.jm}</td>
                                       <td className="right">
                                         {editingInboundId === doc.id ? (
-                                          <input className="search" inputMode="decimal" value={String(line.qty ?? "")} onChange={(e) => patchInboundLine(line.id, "qty", Number(e.target.value.replace(",", ".")))} style={{ width: 110, textAlign: "right", padding: "7px 8px", fontWeight: 900 }} />
+                                          <input className="search" inputMode="decimal" value={String(line.qty ?? "")} onChange={(e) => patchInboundLine(line.id, "qty", Number(e.target.value.replace(",", ".")))} style={{ width: 110, textAlign: "right", padding: "5px 8px", fontWeight: 900 }} />
                                         ) : qtyLabel(Number(line.qty || 0))}
                                       </td>
                                       <td className="right">
                                         {editingInboundId === doc.id ? (
-                                          <input className="search" inputMode="decimal" value={String(line.price ?? "")} onChange={(e) => patchInboundLine(line.id, "price", Number(e.target.value.replace(",", ".")))} style={{ width: 125, textAlign: "right", padding: "7px 8px", fontWeight: 900 }} />
+                                          <input className="search" inputMode="decimal" value={String(line.price ?? "")} onChange={(e) => patchInboundLine(line.id, "price", Number(e.target.value.replace(",", ".")))} style={{ width: 125, textAlign: "right", padding: "5px 8px", fontWeight: 900 }} />
                                         ) : money(Number(line.price || 0))}
                                       </td>
                                       <td className="right"><b>{money(Number(line.qty || 0) * Number(line.price || 0))}</b></td>
@@ -3000,19 +2994,19 @@ async function saveImageAdjust() {
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
                       <div style={{ padding: 10, borderRadius: 12, background: "#f3f4f6" }}>
-                        <div style={{ fontSize: 11, fontWeight: 900, color: "#6b7280" }}>POČETNO</div>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: "#6b7280" }}>POČETNO</div>
                         <div style={{ fontSize: 22, fontWeight: 1000 }}>0 {s.jm}</div>
                       </div>
                       <div style={{ padding: 10, borderRadius: 12, background: "#ecfdf5" }}>
-                        <div style={{ fontSize: 11, fontWeight: 900, color: "#047857" }}>UKUPNO UŠLO</div>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: "#047857" }}>UKUPNO UŠLO</div>
                         <div style={{ fontSize: 22, fontWeight: 1000, color: "#047857" }}>+{qtyLabel(ulaz)}</div>
                       </div>
                       <div style={{ padding: 10, borderRadius: 12, background: "#fff7ed" }}>
-                        <div style={{ fontSize: 11, fontWeight: 900, color: "#c2410c" }}>TREBOVANO</div>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: "#c2410c" }}>TREBOVANO</div>
                         <div style={{ fontSize: 22, fontWeight: 1000, color: "#c2410c" }}>−{qtyLabel(izlaz)}</div>
                       </div>
                       <div style={{ padding: 10, borderRadius: 12, background: "#eef2ff" }}>
-                        <div style={{ fontSize: 11, fontWeight: 900, color: "#1c2f82" }}>TRENUTNO</div>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: "#1c2f82" }}>TRENUTNO</div>
                         <div style={{ fontSize: 22, fontWeight: 1000, color: "#1c2f82" }}>{qtyLabel(racunato)} {s.jm}</div>
                       </div>
                     </div>
@@ -3123,7 +3117,7 @@ async function saveImageAdjust() {
                                 color: "white",
                                 minHeight: 32,
                                 fontSize: 10,
-                                padding: "7px 8px",
+                                padding: "5px 8px",
                                 display: "grid",
                                 placeItems: "center",
                                 textAlign: "center",
@@ -3214,12 +3208,12 @@ async function saveImageAdjust() {
                             background: "#dc2626",
                             color: "#fff",
                             fontWeight: 1000,
-                            fontSize: 11,
+                            fontSize: 20,
                             cursor: deletingArticleId === s.article_id ? "wait" : "pointer",
-                            padding: "7px 8px"
+                            padding: "5px 8px"
                           }}
                         >
-                          {deletingArticleId === s.article_id ? "BRIŠEM..." : "🗑 OBRIŠI ARTIKAL"}
+                          {deletingArticleId === s.article_id ? "…" : "🗑"}
                         </button>
                       </td>
                       <td style={{ minWidth: 190 }}>
@@ -3260,7 +3254,7 @@ async function saveImageAdjust() {
                           onClick={() => deleteArticle(s)}
                           style={{ width: "100%", minHeight: 42, border: "2px solid #dc2626", borderRadius: 10, background: "#fef2f2", color: "#b91c1c", fontWeight: 1000, cursor: deletingArticleId === s.article_id ? "wait" : "pointer", padding: "7px 9px" }}
                         >
-                          {deletingArticleId === s.article_id ? "BRIŠEM..." : "🗑 OBRIŠI ARTIKAL"}
+                          {deletingArticleId === s.article_id ? "…" : "🗑"}
                         </button>
                       </td>
                     </tr>

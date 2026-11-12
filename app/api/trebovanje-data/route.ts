@@ -72,7 +72,7 @@ export async function GET() {
         .from("cm_stock_view")
         .select("article_id,sifra,naziv,barkod,jm,stanje")
         .order("naziv"),
-      admin.from("cm_articles").select("id,image_zoom,image_x,image_y,transportno_pakovanje"),
+      admin.from("cm_articles").select("id,image_zoom,image_x,image_y,transportno_pakovanje,active").eq("active", true),
       articleImageMap(),
     ]);
 
@@ -90,7 +90,8 @@ export async function GET() {
       ])
     );
 
-    const safeStock = (stock || []).map((x: any) => {
+    const activeArticleIds = new Set((articlePositions || []).map((a: any) => String(a.id)));
+    const safeStock = (stock || []).filter((x: any) => activeArticleIds.has(String(x.article_id))).map((x: any) => {
       const position = positionMap.get(String(x.article_id)) || { image_zoom: 1, image_x: 0, image_y: 0, transportno_pakovanje: null };
       return {
         ...x,

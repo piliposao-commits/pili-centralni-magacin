@@ -81,56 +81,23 @@ export async function DELETE(req: Request) {
 
     const { data: article, error: articleError } = await admin
       .from("cm_articles")
-      .select("id,sifra,naziv")
+      .select("id,sifra,naziv,active")
       .eq("id", articleId)
       .maybeSingle();
     if (articleError) throw articleError;
     if (!article) return NextResponse.json({ ok: false, message: "Artikal ne postoji." }, { status: 404 });
 
-    const { count: documentCount, error: documentError } = await admin
-      .from("cm_document_lines")
-      .select("id", { count: "exact", head: true })
-      .eq("article_id", articleId);
-    if (documentError) throw documentError;
-    if (Number(documentCount || 0) > 0) {
-      return NextResponse.json({
-        ok: false,
-        message: `Artikal ${article.sifra} — ${article.naziv} ima istoriju dokumenata. Prvo obriši pogrešnu kalkulaciju/vezu iz koje je nastao; neću obrisati istoriju drugih ulaza ili izlaza.`,
-      }, { status: 409 });
-    }
+    const { error: updateError } = await admin
+      .from("cm_articles")
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .eq("id", articleId);
+    if (updateError) throw updateError;
 
-    const inventoryCheck = await admin
-      .from("cm_inventory_history")
-      .select("id", { count: "exact", head: true })
-      .eq("article_id", articleId);
-    if (!inventoryCheck.error && Number(inventoryCheck.count || 0) > 0) {
-      return NextResponse.json({ ok: false, message: "Artikal ima istoriju popisa i ne može bezbedno da se obriše." }, { status: 409 });
-    }
-    if (inventoryCheck.error && inventoryCheck.error.code !== "42P01") throw inventoryCheck.error;
-
-    const tsCheck = await admin
-      .from("ts_market_movements")
-      .select("movement_id", { count: "exact", head: true })
-      .eq("pili_article_id", articleId);
-    if (!tsCheck.error && Number(tsCheck.count || 0) > 0) {
-      return NextResponse.json({ ok: false, message: "Artikal već ima TS Market kretanje i ne može bezbedno da se obriše." }, { status: 409 });
-    }
-    if (tsCheck.error && tsCheck.error.code !== "42P01") throw tsCheck.error;
-
-    const { data: stocks, error: stockError } = await admin.from("cm_stock").select("location_id,qty").eq("article_id", articleId);
-    if (stockError) throw stockError;
-    const nonZero = (stocks || []).find((x: any) => Math.abs(Number(x.qty || 0)) > 0.000001);
-    if (nonZero) {
-      return NextResponse.json({ ok: false, message: `Artikal još ima stanje ${Number(nonZero.qty || 0)}. Prvo obriši pogrešnu kalkulaciju ili uradi ispravku stanja.` }, { status: 409 });
-    }
-
-    await admin.from("cm_stock").delete().eq("article_id", articleId);
-    try { await admin.storage.from("cm-article-images").remove([articleId]); } catch {}
-    const { error: deleteError } = await admin.from("cm_articles").delete().eq("id", articleId);
-    if (deleteError) throw deleteError;
-
-    return NextResponse.json({ ok: true, message: `Artikal ${article.sifra} — ${article.naziv} je obrisan.` });
+    return NextResponse.json({
+      ok: true,
+      message: `Artikal ${article.sifra} — ${article.naziv} je uklonjen iz aktivnog stanja. Istorija je sačuvana.`,
+    });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, message: String(e?.message || "Greška pri brisanju artikla.") }, { status: 400 });
+    return NextResponse.json({ ok: false, message: String(e?.message || "Greška pri uklanjanju artikla.") }, { status: 400 });
   }
 }

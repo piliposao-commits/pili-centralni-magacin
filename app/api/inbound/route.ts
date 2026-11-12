@@ -44,7 +44,7 @@ export async function POST(req: Request) {
 
     let processed = 0;
     for (const x of lines) {
-      const { data: found, error: findError } = await admin.from("cm_articles").select("id,sifra,naziv,barkod,jm,maloprodajna_cena").eq("sifra", x.sifra).maybeSingle();
+      const { data: found, error: findError } = await admin.from("cm_articles").select("id,sifra,naziv,barkod,jm,maloprodajna_cena,active").eq("sifra", x.sifra).maybeSingle();
       if (findError) throw findError;
 
       let safeBarcode = x.barkod;
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
 
       let article: any;
       if (found) {
-        const patch: any = { naziv: x.naziv || found.naziv, jm: x.jm || found.jm, updated_at: new Date().toISOString() };
+        const patch: any = { naziv: x.naziv || found.naziv, jm: x.jm || found.jm, active: true, updated_at: new Date().toISOString() };
         if (!found.barkod && safeBarcode) patch.barkod = safeBarcode;
         if (x.maloprodajna_cena > 0) patch.maloprodajna_cena = x.maloprodajna_cena;
         const { data: updated, error: updateError } = await admin.from("cm_articles").update(patch).eq("id", found.id).select("id,sifra,naziv,barkod,jm,maloprodajna_cena").single();
@@ -165,7 +165,7 @@ export async function PATCH(req: Request) {
           lineJm = String(target.jm || lineJm);
           const { error: targetPriceError } = await admin
             .from("cm_articles")
-            .update({ maloprodajna_cena: price, updated_at: new Date().toISOString() })
+            .update({ maloprodajna_cena: price, active: true, updated_at: new Date().toISOString() })
             .eq("id", target.id);
           if (targetPriceError) throw targetPriceError;
         } else if (old.article_id) {
@@ -197,7 +197,7 @@ export async function PATCH(req: Request) {
       } else if (old.article_id) {
         const { error: articleUpdateError } = await admin
           .from("cm_articles")
-          .update({ maloprodajna_cena: price, updated_at: new Date().toISOString() })
+          .update({ maloprodajna_cena: price, active: true, updated_at: new Date().toISOString() })
           .eq("id", old.article_id);
         if (articleUpdateError) throw articleUpdateError;
       }
