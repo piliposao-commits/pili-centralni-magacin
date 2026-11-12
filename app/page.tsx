@@ -329,6 +329,8 @@ export default function Page() {
   const [editingInboundId, setEditingInboundId] = useState<string | null>(null);
   const [editingInboundLines, setEditingInboundLines] = useState<InboundLine[]>([]);
   const [savingInboundCorrection, setSavingInboundCorrection] = useState(false);
+  const [deletingInboundId, setDeletingInboundId] = useState<string | null>(null);
+  const [deletingArticleId, setDeletingArticleId] = useState<string | null>(null);
   const [dest, setDest] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<TransferLine[]>([]);
@@ -1192,6 +1194,67 @@ async function saveImageAdjust() {
       setMsg(String(e?.message || "Greška pri čuvanju ispravke."));
     } finally {
       setSavingInboundCorrection(false);
+    }
+  }
+
+  async function deleteInboundCalculation(doc: InboundDoc) {
+    if (deletingInboundId) return;
+    const code = window.prompt(`BRISANJE CELE KALKULACIJE\n${doc.supplier || "Dobavljač"} · ${doc.document_no || "bez broja"}\n\nUnesi šifru 1234:`);
+    if (code === null) return;
+    if (code !== "1234") {
+      setMsg("Pogrešna šifra. Kalkulacija nije obrisana.");
+      return;
+    }
+    if (!window.confirm("Ovo briše celu kalkulaciju, njene količine odmah skida sa stanja i briše nove artikle koji postoje samo na toj kalkulaciji. Nastaviti?")) return;
+
+    setDeletingInboundId(doc.id);
+    setMsg("Brišem kalkulaciju i preračunavam stanje...");
+    try {
+      const r = await fetch("/api/inbound", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ document_id: doc.id }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.ok) throw new Error(j?.message || "Kalkulacija nije obrisana.");
+      setOpenInboundId(null);
+      setEditingInboundId(null);
+      setEditingInboundLines([]);
+      setMsg(`✓ ${j.message || "Kalkulacija je obrisana i stanje je preračunato."}`);
+      await load();
+    } catch (e: any) {
+      setMsg(String(e?.message || "Greška pri brisanju kalkulacije."));
+    } finally {
+      setDeletingInboundId(null);
+    }
+  }
+
+  async function deleteArticle(article: Stock) {
+    if (deletingArticleId) return;
+    const code = window.prompt(`OBRIŠI ARTIKAL\n${article.sifra} — ${article.naziv}\n\nUnesi šifru 1234:`);
+    if (code === null) return;
+    if (code !== "1234") {
+      setMsg("Pogrešna šifra. Artikal nije obrisan.");
+      return;
+    }
+    if (!window.confirm(`Trajno obrisati artikal ${article.sifra} — ${article.naziv}?\n\nBrisanje će biti dozvoljeno samo ako artikal nema dokumente, popis, TS Market kretanje ni stanje.`)) return;
+
+    setDeletingArticleId(article.article_id);
+    setMsg("Brišem artikal...");
+    try {
+      const r = await fetch("/api/article", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ article_id: article.article_id }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.ok) throw new Error(j?.message || "Artikal nije obrisan.");
+      setMsg(`✓ ${j.message || "Artikal je obrisan."}`);
+      await load();
+    } catch (e: any) {
+      setMsg(String(e?.message || "Greška pri brisanju artikla."));
+    } finally {
+      setDeletingArticleId(null);
     }
   }
 
@@ -2548,13 +2611,23 @@ async function saveImageAdjust() {
                                   <button type="button" className="btn" disabled={savingInboundCorrection} onClick={() => saveInboundCorrection(doc.id)}>{savingInboundCorrection ? "ČUVAM..." : "SAČUVAJ ISPRAVKU"}</button>
                                 </>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => beginInboundCorrection(doc)}
-                                  style={{ border: "2px solid #f59e0b", background: "#fff7ed", color: "#9a3412", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: "pointer" }}
-                                >
-                                  🔒 ISPRAVI KALKULACIJU
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => beginInboundCorrection(doc)}
+                                    style={{ border: "2px solid #f59e0b", background: "#fff7ed", color: "#9a3412", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: "pointer" }}
+                                  >
+                                    🔒 ISPRAVI KALKULACIJU
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={deletingInboundId === doc.id}
+                                    onClick={() => deleteInboundCalculation(doc)}
+                                    style={{ border: "2px solid #dc2626", background: "#fef2f2", color: "#b91c1c", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: deletingInboundId === doc.id ? "wait" : "pointer" }}
+                                  >
+                                    {deletingInboundId === doc.id ? "BRIŠEM..." : "🗑 OBRIŠI CELU KALKULACIJU"}
+                                  </button>
+                                </>
                               )}
                             </div>
                             <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: 12, background: "white" }}>
@@ -3007,7 +3080,7 @@ async function saveImageAdjust() {
             <div className="tableWrap">
               <table className="table">
                 <thead>
-                  <tr><th>Slika</th><th>Šifra</th><th>Naziv</th><th>Istorija</th><th>Barkod</th><th className="right">Stanje</th><th className="right">Malopr. cena</th><th className="right">Vrednost</th></tr>
+                  <tr><th>Slika</th><th>Šifra</th><th>Naziv</th><th>Istorija</th><th>Barkod</th><th className="right">Stanje</th><th className="right">Malopr. cena</th><th className="right">Vrednost</th><th>Brisanje</th></tr>
                 </thead>
                 <tbody>
                   {stock.map((s) => (
@@ -3162,10 +3235,20 @@ async function saveImageAdjust() {
                       <td className="right"><b>{qtyLabel(Number(s.stanje))} {s.jm}</b>{Number(s.transportno_pakovanje||0)>0 && <div style={{fontSize:11,color:"#ef7d00",fontWeight:1000}}>{kutijeLabel(Number(s.stanje),s.transportno_pakovanje)}</div>}</td>
                       <td className="right">{money(s.maloprodajna_cena)}</td>
                       <td className="right"><b>{money(s.vrednost)}</b></td>
+                      <td style={{ minWidth: 145 }}>
+                        <button
+                          type="button"
+                          disabled={deletingArticleId === s.article_id}
+                          onClick={() => deleteArticle(s)}
+                          style={{ width: "100%", minHeight: 42, border: "2px solid #dc2626", borderRadius: 10, background: "#fef2f2", color: "#b91c1c", fontWeight: 1000, cursor: deletingArticleId === s.article_id ? "wait" : "pointer", padding: "7px 9px" }}
+                        >
+                          {deletingArticleId === s.article_id ? "BRIŠEM..." : "🗑 OBRIŠI ARTIKAL"}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot><tr><td colSpan={7}><b>UKUPNA VREDNOST</b></td><td className="right"><b>{money(total)}</b></td></tr></tfoot>
+                <tfoot><tr><td colSpan={7}><b>UKUPNA VREDNOST</b></td><td className="right"><b>{money(total)}</b></td><td></td></tr></tfoot>
               </table>
             </div>
           </section>

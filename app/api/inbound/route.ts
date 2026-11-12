@@ -227,3 +227,115 @@ export async function PATCH(req: Request) {
   }
 }
 
+
+export async function DELETE(req: Request) {
+  try {
+    await requireSession("ADMIN");
+    const b = await req.json().catch(() => ({}));
+    const documentId = String(b?.document_id || "").trim();
+    if (!documentId) {
+      return NextResponse.json({ ok: false, message: "Nedostaje kalkulacija za brisanje." }, { status: 400 });
+    }
+
+    const { data: central, error: centralError } = await admin
+      .from("cm_locations")
+      .select("id")
+      .eq("type", "CENTRAL")
+      .limit(1)
+      .maybeSingle();
+    if (centralError) throw centralError;
+    if (!central) throw new Error("Centralni magacin nije pronađen.");
+
+    const { data: doc, error: docError } = await admin
+      .from("cm_documents")
+      .select("id,type,status,destination_location_id,document_no,supplier")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (docError) throw docError;
+    if (!doc || String(doc.type).toUpperCase() !== "ULAZ") {
+      return NextResponse.json({ ok: false, message: "Kalkulacija ne postoji ili nije ulaz robe." }, { status: 404 });
+    }
+    if (String(doc.destination_location_id || "") !== String(central.id)) {
+      return NextResponse.json({ ok: false, message: "Ovaj dokument nije ulaz centralnog magacina." }, { status: 400 });
+    }
+
+    const { data: lines, error: linesError } = await admin
+      .from("cm_document_lines")
+      .select("article_id,sifra,naziv,qty")
+      .eq("document_id", documentId);
+    if (linesError) throw linesError;
+
+    const articleIds = Array.from(new Set((lines || []).map((x: any) => String(x.article_id || "")).filter(Boolean)));
+
+    // Brisanje dokumenta kaskadno briše njegove stavke. Stanje se zatim računa ponovo iz knjige kretanja.
+    const { error: deleteDocError } = await admin.from("cm_documents").delete().eq("id", documentId);
+    if (deleteDocError) throw deleteDocError;
+
+    await reconcileCentralStock(admin, String(central.id));
+
+    const deletedArticles: string[] = [];
+    const keptArticles: string[] = [];
+
+    for (const articleId of articleIds) {
+      const { data: article } = await admin
+        .from("cm_articles")
+        .select("id,sifra,naziv")
+        .eq("id", articleId)
+        .maybeSingle();
+      if (!article) continue;
+
+      const { count: docLineCount, error: docLineCountError } = await admin
+        .from("cm_document_lines")
+        .select("id", { count: "exact", head: true })
+        .eq("article_id", articleId);
+      if (docLineCountError) throw docLineCountError;
+
+      let inventoryHistoryCount = 0;
+      const inventoryCheck = await admin
+        .from("cm_inventory_history")
+        .select("id", { count: "exact", head: true })
+        .eq("article_id", articleId);
+      if (!inventoryCheck.error) inventoryHistoryCount = Number(inventoryCheck.count || 0);
+      else if (inventoryCheck.error.code !== "42P01") throw inventoryCheck.error;
+
+      let tsMovementCount = 0;
+      const tsCheck = await admin
+        .from("ts_market_movements")
+        .select("movement_id", { count: "exact", head: true })
+        .eq("pili_article_id", articleId);
+      if (!tsCheck.error) tsMovementCount = Number(tsCheck.count || 0);
+      else if (tsCheck.error.code !== "42P01") throw tsCheck.error;
+
+      const { data: stockRows, error: stockRowsError } = await admin
+        .from("cm_stock")
+        .select("location_id,qty")
+        .eq("article_id", articleId);
+      if (stockRowsError) throw stockRowsError;
+      const hasNonZeroStock = (stockRows || []).some((x: any) => Math.abs(Number(x.qty || 0)) > 0.000001);
+
+      // Artikal fizički brišemo samo ako je ova kalkulacija bila njegov jedini trag.
+      // Ako je korišćen u drugom ulazu/izlazu/popisu/TS Marketu, ostaje kao master artikal.
+      if (Number(docLineCount || 0) === 0 && inventoryHistoryCount === 0 && tsMovementCount === 0 && !hasNonZeroStock) {
+        await admin.from("cm_stock").delete().eq("article_id", articleId);
+        try { await admin.storage.from("cm-article-images").remove([articleId]); } catch {}
+        const { error: articleDeleteError } = await admin.from("cm_articles").delete().eq("id", articleId);
+        if (!articleDeleteError) deletedArticles.push(`${article.sifra} — ${article.naziv}`);
+        else keptArticles.push(`${article.sifra} — ${article.naziv}`);
+      } else {
+        keptArticles.push(`${article.sifra} — ${article.naziv}`);
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      deleted_document: documentId,
+      deleted_articles: deletedArticles,
+      kept_articles: keptArticles,
+      message: keptArticles.length
+        ? `Kalkulacija je obrisana i stanje je preračunato. Obrisano artikala: ${deletedArticles.length}. ${keptArticles.length} artikala je zadržano jer imaju drugu istoriju.`
+        : `Kalkulacija je obrisana, stanje je preračunato i obrisani su artikli koji su postojali samo na toj kalkulaciji.`,
+    });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, message: String(e?.message || "Greška pri brisanju kalkulacije.") }, { status: 400 });
+  }
+}
