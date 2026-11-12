@@ -2611,24 +2611,22 @@ async function saveImageAdjust() {
                                   <button type="button" className="btn" disabled={savingInboundCorrection} onClick={() => saveInboundCorrection(doc.id)}>{savingInboundCorrection ? "ČUVAM..." : "SAČUVAJ ISPRAVKU"}</button>
                                 </>
                               ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => beginInboundCorrection(doc)}
-                                    style={{ border: "2px solid #f59e0b", background: "#fff7ed", color: "#9a3412", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: "pointer" }}
-                                  >
-                                    🔒 ISPRAVI KALKULACIJU
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={deletingInboundId === doc.id}
-                                    onClick={() => deleteInboundCalculation(doc)}
-                                    style={{ border: "2px solid #dc2626", background: "#fef2f2", color: "#b91c1c", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: deletingInboundId === doc.id ? "wait" : "pointer" }}
-                                  >
-                                    {deletingInboundId === doc.id ? "BRIŠEM..." : "🗑 OBRIŠI CELU KALKULACIJU"}
-                                  </button>
-                                </>
+                                <button
+                                  type="button"
+                                  onClick={() => beginInboundCorrection(doc)}
+                                  style={{ border: "2px solid #f59e0b", background: "#fff7ed", color: "#9a3412", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: "pointer" }}
+                                >
+                                  🔒 ISPRAVI KALKULACIJU
+                                </button>
                               )}
+                              <button
+                                type="button"
+                                disabled={deletingInboundId === doc.id || savingInboundCorrection}
+                                onClick={() => deleteInboundCalculation(doc)}
+                                style={{ border: "2px solid #dc2626", background: "#fef2f2", color: "#b91c1c", borderRadius: 10, padding: "8px 12px", fontWeight: 1000, cursor: (deletingInboundId === doc.id || savingInboundCorrection) ? "wait" : "pointer" }}
+                              >
+                                {deletingInboundId === doc.id ? "BRIŠEM..." : "🗑 OBRIŠI CELU KALKULACIJU"}
+                              </button>
                             </div>
                             <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: 12, background: "white" }}>
                               <table className="table" style={{ minWidth: 720 }}>
